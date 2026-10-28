@@ -1502,4 +1502,130 @@ ref_map 对照被规划了但从未执行，这就是它一直没暴露的原因
 决定，本轮不擅自改游戏参数。
 
 ---
-*本文档为唯一权威计划。S0 定架构，S1–S4 已回填，S5 见 §8，S4.5 见 §8.10，S5.5/5.6 见 §8.13–8.43。*
+
+### 8.44 【2026-10-28】环境迁移到 G 盘 —— 路径改为推导（+ 两处「静默」修复）
+
+**本轮起因**：用户迁移开发环境，要求今后在 G 盘开发、不占用 C 盘，并拉取最新
+补丁、同步文档与记忆。**这不是一次「换盘符」的行政动作**，它暴露了一类贯穿
+整个仓库的故障模式，必须一次性收口。
+
+#### 8.44.1 为什么「换盘符」是危险操作
+
+旧环境是 `Q:`。盘没了以后，`Q:\UE\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe`
+依然是一个**语法完全合法的字符串**。于是：
+
+- 没有任何一步**快速失败**；
+- `os.path.exists()` 返回 False，但代码普遍不查；
+- 错误最后以「editor 退出 1」「log 里 NO LOG at ...」「文件找不到」的形式
+  出现在**很远的子进程**里，与真正的因由隔了三四层。
+
+这正是 §8.6「exit code 不是可靠信号」的同一个病：**判据离事实太远**。
+所以本轮不满足于把 `Q:` 换成 `G:`——那是把同一个脆弱性搬到新地址。
+
+#### 8.44.2 新环境实测（不是推测）
+
+| 项 | 值 | 判据 |
+|---|---|---|
+| `<HOME>` | `G:\BaiduNetdiskDownload\real` | — |
+| repo | `<HOME>\MC2UE5\repo` | 层级与旧 Q 盘完全一致 |
+| 引擎 | `<HOME>\UE\UE_5.8` | `Build.version` = 5.8.3 / CL 58210709 |
+| venv | `<HOME>\venv` | py 3.13.9 / numpy 2.5.1 / scipy 1.18.1 |
+| 工具链 | `<HOME>\AutoSDK` `WindowsKits` `dotnet` `UBA` `VSBuildTools` | 均在 |
+
+> `<HOME>\MC2UE5\venv` **已损坏**：`pyvenv.cfg` 指向随旧环境删除的 base 解释器，
+> 运行时报 `did not find executable at 'Q:\WorkBuddyPortable\...'`。
+> 「路径存在但不能跑」比「路径不存在」更贵——`exists()` 会放行。全部引用已改指
+> `<HOME>\venv`。
+
+#### 8.44.3 路径改为推导（唯一来源）
+
+新增 `tools/mcpaths.py`：`REPO` 由 `__file__` 推，`UE_ROOT`/`VENV_PY`/`LOGS`/
+`TOOLCHAIN` 由 `<HOME>` 推；覆盖变量 `MC2UE5_HOME` / `MC_UE_ROOT` /
+`MC_LOG_DIR` / `MC_VENV_PY`。带 `check()`：逐项 OK/MISS 并打印，缺东西非 0
+退出——**长任务开工前一行自查**，把「四十分钟后才炸」压成「第一秒就炸」。
+
+- `tools/build_world.py`：`EDITOR` 由 mcpaths 给；`MC2UE5_HOME`/`MC_UE_ROOT`
+  写进子进程 ENV，保证编辑器侧脚本与父进程同源。
+- `level_census.py`：`OUT` 改 `MC_LOG_DIR` + 自身位置推导（往上 4 层）。
+- `build_shipping.bat` / `package_shipping.bat`：`<HOME> = %~dp0..\..\..`，
+  启动打印 `===ENV ...===`，缺 venv/引擎/uproject 立即报错退出。
+  （cmd 陷阱记一笔：`if cond cmd & cmd2` 里 `&` 之后**无条件执行**，必须用括号包。）
+- 机械收口 `tools/migrate_paths.py`：84 文件 / 261 处；之后 125 个 py 全部
+  `py_compile` 通过。**下次再搬盘可复用。**
+
+#### 8.44.4 顺手修掉的三处「静默」（都是本轮才看见的）
+
+1. **`filter.lfs.process = cat`**（仓库 `.git/config`）：所有 git 命令刷屏
+   `Unexpected line 'git-filter-client', expected git-filter-server`。
+   git 把 `cat` 当 filter-process 起并发送握手行，`cat` 原样回显，git 于是
+   看到 client 而不是 server。这是旧环境为绕开「没装 git-lfs」留的 hack。
+   删除该覆盖，回落到全局真 git-lfs 3.7.1。
+2. **`DefaultInput.ini` 未提交改动把输入类改回 EnhancedPlayerInput**：
+   而 `MCReplicaCharacter.cpp:256` 只 `BindAxis/BindAction`、`Build.cs` 也没
+   依赖 EnhancedInput——**§8.35 已定位的「镜头无法移动」根因被原样复活**。
+   已 `git checkout` 还原。
+   *方法学教训：迁移后必须 diff 一遍未提交改动，不能假设工作区 == HEAD。*
+3. **`level_census.py` 不写 `RESULT:`**：`build_world.py` 靠日志里的 `RESULT:`
+   判 PASS/FAIL（其 docstring 明写 "every script in this repo already writes
+   RESULT"），而它是唯一不写的一个，以 `--- done ---` 结尾。于是 13 步流水线
+   的**最后一步恒 FAIL**，前 12 步白跑。这不是崩，是**判错**——比崩更贵。
+   已补 RESULT，判定标准刻意取「活性」而非「内容」：只读审计本来就会在半成品
+   关卡上跑，用数量卡它会在一键重建的正常中间态报错。
+
+#### 8.44.5 git / LFS / 网络现状（本机实测）
+
+- 仓库**已改名** `stellarissss/SYFZ-MC2UE5`（旧名 `MC2UE5` 仍重定向）。
+  `origin` 已更新为新名。
+- `git config` 里 `http.proxy=127.0.0.1:7890` 指向一个**没在跑**的代理，
+  直连 `github.com` 不通。所有 git 网络操作必须
+  `-c http.proxy= -c https.proxy=` 绕过，并走 `ghfast.top` 镜像。
+- 令牌放**用户级环境变量** `MC2UE5_PAT`（不入仓库）。
+- LFS：`git lfs pull` 走不通（batch 端点在 github.com，经镜像 4xx）。
+  用仓库外 `<HOME>\MC2UE5\tools\fetch_lfs_raw.py`（走 `media.githubusercontent.com`，
+  按指针 sha256 逐件校验）。本轮 **449/449 补齐，695/695 全真图，0 指针**。
+- 新增 `tools/check_lfs_state.py`：报告 real/pointer/missing 并按顶层目录分组。
+  **必要性**：指针文件也是「存在」的（130 字节 ASCII），`exists()` 会放行；
+  拿它当贴图去平均，会产出一张看起来合理但完全错误的图集。
+
+#### 8.44.6 迁移验收（已实跑，不是推断）
+
+```
+python tools\build_world.py --only census
+→ RESULT: PASS -- 1265 actors, 1171144 instanced instances   exit=0
+```
+
+引擎 5.8.3 从 G 盘启动、项目加载、python 执行、日志落 G 盘，全链通。
+
+#### 8.44.7 顺带发现的一条新线索（未收口，**不作结论**）
+
+迁移后首次启动的日志里有：
+
+```
+LogStaticMesh: Warning: FStaticMeshRenderData::Serialize found NaN in
+Bounds of '/Game/MC/Terrain/terrain_0112_-544'
+```
+
+值得单独立案，因为它指向本项目一个**系统性盲区**：迄今为止所有「资产级全对」
+的结论（三角数 676656/676656、法线 387096/387096、109 槽 0 None、24 actor
+visible、sections 8/9/4、actor bbox 与相机相交）**全部取自 mesh description 或
+actor transform，没有一条看过 `FStaticMeshRenderData` 的 bounds**——而那是剔除
+路径真正使用的数据。NaN bounds 的网格不是被「正确剔除」，是**永远剔除**：
+渲染器算不出它到相机的距离，它永远进不了 draw call。这与「几何完美却 0% 像素」
+完全吻合，且对上述全部检查不可见。
+
+**但本轮实测：`unreal.Box` 读 28 个资产全部有限，0 个 NaN**（
+`probe_terrain_bounds.py` → `logs/terrain_bounds.txt`）。所以该警告当前
+**不可复现**，不能作为结论。留下来的是脚本与这条盲区的记录。
+*API 记一笔：`unreal.Box` 是 `min`/`max`/`is_valid`，没有
+`FBoxSphereBounds` 的 `origin`/`extent`/`sphere_radius`。*
+
+#### 8.44.8 仍未收口
+
+- 地形不渲染（品红自发光测试 0.00% 像素）——见 §8.44.7 的新盲区。
+- §8.43 的 C++ 改动**从未编译**（作者机上无 UE/MSVC），首编须验。
+- 打包验证（ENG-PKG1）未做。
+- `voxel_data/` 仍未入库；`overworld.bin` 是存档丢失后唯一数据源，建议按
+  §8.43.2-9 归档到 Release（58.7 MB，需用户确认后再推）。
+
+---
+*本文档为唯一权威计划。S0 定架构，S1–S4 已回填，S5 见 §8，S4.5 见 §8.10，S5.5/5.6 见 §8.13–8.44。*
