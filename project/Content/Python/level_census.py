@@ -124,6 +124,29 @@ def main():
     say("TOTAL instanced instances: %d" % total_inst)
     say("--- done ---")
 
+    # build_world.py grades every editor step by the "RESULT:" line in its log
+    # -- its own docstring promises "every script in this repo already writes
+    # RESULT", and this was the one that did not, so `build_world.py --only
+    # census` always reported FAILED even on a perfectly loaded level (observed
+    # 2026-10-28: 1041 MCblk + 158 B + 40 MC + 24 T, then "census FAILED").
+    #
+    # Deliberately a liveness check, not a content assertion: the census is a
+    # read-only audit and is legitimately run on half-built levels, so grading
+    # it on counts would make the one-click rebuild fail in states that are not
+    # errors. "The editor opened the level and could enumerate it" is the claim
+    # this step is entitled to make.
+    if not actors:
+        say("RESULT: FAIL -- no actors in the open level "
+            "(wrong map? nothing loaded?)")
+        return 1
+    if total_inst == 0:
+        say("RESULT: FAIL -- %d actors but 0 instanced instances; the level "
+            "loaded but nothing is placed" % len(actors))
+        return 1
+    say("RESULT: PASS -- %d actors, %d instanced instances"
+        % (len(actors), total_inst))
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

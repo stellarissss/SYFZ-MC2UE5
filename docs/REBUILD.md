@@ -54,16 +54,32 @@
 
 ```
 git lfs install
-git lfs pull
+git lfs pull            # 注意：经 ghfast 镜像时 LFS batch 会 4xx，见下
 ```
 
-本机实测：UE 资产（`.uasset/.umap`）**全部已落地**；`assets/textures/**/*.png`
-（Minecraft 原版方块贴图）中仍有 **449 个是 LFS 指针**。这只影响「重新烘图集」，
-不影响当前已烘好的 `out/atlas` 与已导入的材质。重烘前先确认这批贴图是真图：
+本机实测（2026-10-28）：**695/695 全部真图，0 指针、0 缺失**。
+
+迁移当时有 449 个 `assets/textures/**/*.png` 仍是指针。`git lfs pull` 走不通
+——LFS 的 batch 端点在 `github.com`，经 `ghfast.top` 镜像返回 4xx。可行做法是
+仓库外那个工具（走 `media.githubusercontent.com`，按指针里的 sha256 逐个校验）：
 
 ```
-python tools\check_lfs_state.py      REM OK = 全部真图 / MISS = 还有指针
+python <HOME>\MC2UE5\tools\fetch_lfs_raw.py ^
+    --repo stellarissss/SYFZ-MC2UE5 --ref main --root <repo> --include assets/textures
 ```
+
+> 仓库已改名 `stellarissss/SYFZ-MC2UE5`（旧名 `MC2UE5` 仍重定向，git 不受影响）。
+> 该工具直接用 media 主机，所以必须填**新名**。
+
+任何时候先自查，再决定能不能重烘图集：
+
+```
+python tools\check_lfs_state.py      REM OK = 全部真图 / INCOMPLETE = 还有指针
+```
+
+为什么这项检查有存在必要：**指针文件也是「存在」的**（130 字节 ASCII），
+`os.path.exists()` 会放行，烘图集时它把 130 字节当成贴图去平均，产出一张
+看起来合理但完全错误的图集。所以「文件在不在」这个判据在这里没有意义。
 
 ## 1. 数据保险（强烈建议第一步做）
 
