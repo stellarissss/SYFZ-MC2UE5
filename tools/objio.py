@@ -10,11 +10,23 @@ here and `build_terrain_mesh.write_obj` now delegates to it.
 
 Axis contract (the whole pipeline depends on this one mapping):
 
-    MC block (x, y, z)  ->  UE cm (x * 100, z * 100, y * 100)
+    MC block (x, y, z)  ->  OBJ cm (x * 100, z * 100, y * 100)
 
-Minecraft's ``+z`` becomes Unreal's ``+Y`` and the block height becomes ``Z``.
-That is why a heightfield is written with its two grid axes on X/Y and the height
-on Z, and why nothing downstream needs to think about it again.
+Minecraft's ``+z`` becomes the OBJ file's ``+Y`` and the block height becomes
+``Z``. NOTE the second half of the contract, which lives in the engine, not in
+this file: the Interchange OBJ importer applies the basis flip
+``(x, y, z) -> (x, -y, z)`` when it builds the UStaticMesh, so in FINAL Unreal
+space the mapping is ``UE Y = -(mc z) * 100``. That flip is the single most
+load-bearing fact in the pipeline:
+
+  * the terrain pack (pack_terrain_tiles.py) writes final-UE coordinates and
+    therefore negates Y itself;
+  * structures and S4.5 vegetation go through this writer and inherit the
+    importer's flip for free;
+  * anything that places actors/instances DIRECTLY (the voxel layer's HISM
+    clusters, the PlayerStart) must negate Y itself or it lands in the
+    mirrored half of the level -- see REFACTOR_PLAN §8.43 for the two-sided
+    world this produced before it was understood.
 """
 
 import os

@@ -38,7 +38,10 @@ import sys
 
 import unreal
 
-OUT = os.environ.get("MC_LOG", r"Q:/MC2UE5/logs/ensure_lighting.txt")
+OUT = os.environ.get("MC_LOG_DIR",
+                     os.path.join(os.path.dirname(os.path.dirname(
+                         os.path.abspath(__file__))), "..", "logs",
+                         "ensure_lighting.txt"))
 _lines = []
 
 
@@ -60,50 +63,56 @@ def find_existing(world, cls, label):
 
 
 def make_sun(world):
-	"""A directional light angled the way a mid-morning sun would be.
+        """A directional light angled the way a mid-morning sun would be.
 
-	Pitch -58 rather than straight down: a sun directly overhead flattens every
-	roof and wall face to the same value, which is exactly the "flat brown
-	blobs" read that this pipeline was rebuilt to get away from.
+        Pitch -58 rather than straight down: a sun directly overhead flattens every
+        roof and wall face to the same value, which is exactly the "flat brown
+        blobs" read that this pipeline was rebuilt to get away from.
 
-	Shadows are OFF. The level still holds 1,041 legacy ISM clusters carrying
-	1,171,144 instances, and as soon as a shadow-casting light exists the
-	shadow depth pass overflows its 16-bit mesh-draw-command index and kills the
-	process on startup:
+        Shadows are OFF. The level still holds 1,041 legacy ISM clusters carrying
+        1,171,144 instances, and as soon as a shadow-casting light exists the
+        shadow depth pass overflows its 16-bit mesh-draw-command index and kills the
+        process on startup:
 
-	    Assertion failed: NumAcceptedStaticMeshes >= 0 && MDCIdx < ((uint16) 0xffff)
-	    [File:.../Runtime/Renderer/Private/ShadowSetup.cpp] [Line: 1611]
+            Assertion failed: NumAcceptedStaticMeshes >= 0 && MDCIdx < ((uint16) 0xffff)
+            [File:.../Runtime/Renderer/Private/ShadowSetup.cpp] [Line: 1611]
 
-	Setting cast_shadow=False on those ISM components does not avoid it -- the
-	editor-side write does not mark the render state dirty. Turning the sun's
-	shadows off removes the pass entirely, which is the only reliable way to get
-	an image out of this scene today. Shadows come back once the legacy voxel
-	layer is retired, which is the real fix: those clusters are a superseded
-	crutch that the terrain and structure meshes already replace.
-	"""
-	light = unreal.DirectionalLight()
-	light.set_editor_property("intensity", 4.0)
-	light.set_editor_property("light_color", unreal.LinearColor(1.0, 0.96, 0.90))
-	light.set_editor_property("temperature_enabled", True)
-	light.set_editor_property("temperature", 5600.0)
-	light.set_actor_rotation(unreal.Rotator(-58.0, 0.0, 34.0, "XYZ"))
-	light.set_actor_location(unreal.Vector(0.0, 0.0, 40000.0), False, False)
-	light.set_actor_label("MC_Sun")
-	unreal.EditorLevelLibrary.add_actor_to_level(light) \
-		if hasattr(unreal.EditorLevelLibrary, "add_actor_to_level") \
-		else light.set_editor_property("folder_path", unreal.Name("/Game/MC"))
+        Setting cast_shadow=False on those ISM components does not avoid it -- the
+        editor-side write does not mark the render state dirty. Turning the sun's
+        shadows off removes the pass entirely, which is the only reliable way to get
+        an image out of this scene today. Shadows come back once the legacy voxel
+        layer is retired, which is the real fix: those clusters are a superseded
+        crutch that the terrain and structure meshes already replace.
+        """
+        light = unreal.DirectionalLight()
+        # These are the SAME values AMCFrameCaptureGameMode::ApplyLook forces
+        # at runtime (SunLux=10, rotation (-48,-135,0), sky 0.25, fog 0.0015,
+        # exposure window 0.5..3.0). Writing them here too keeps the editor
+        # viewport and the cooked build agreeing -- before this, the level was
+        # authored at 4.0/(-58,0,34) and silently overwritten to 10/(-48,-135,0)
+        # a second after every launch, two sources of truth fighting.
+        light.set_editor_property("intensity", 10.0)
+        light.set_editor_property("light_color", unreal.LinearColor(1.0, 0.96, 0.90))
+        light.set_editor_property("temperature_enabled", True)
+        light.set_editor_property("temperature", 5600.0)
+        light.set_actor_rotation(unreal.Rotator(-48.0, -135.0, 0.0, "XYZ"))
+        light.set_actor_location(unreal.Vector(0.0, 0.0, 40000.0), False, False)
+        light.set_actor_label("MC_Sun")
+        unreal.EditorLevelLibrary.add_actor_to_level(light) \
+                if hasattr(unreal.EditorLevelLibrary, "add_actor_to_level") \
+                else light.set_editor_property("folder_path", unreal.Name("/Game/MC"))
 
-	# cast_shadows lives on the light COMPONENT, not on the actor. Setting it on
-	# the actor raises "Failed to find property", which is how the first attempt
-	# at this silently did nothing.
-	comp = light.get_component_by_class(unreal.DirectionalLightComponent)
-	if comp:
-		comp.set_editor_property("cast_shadows", False)
+        # cast_shadows lives on the light COMPONENT, not on the actor. Setting it on
+        # the actor raises "Failed to find property", which is how the first attempt
+        # at this silently did nothing.
+        comp = light.get_component_by_class(unreal.DirectionalLightComponent)
+        if comp:
+                comp.set_editor_property("cast_shadows", False)
 
-	say("sun created: intensity=4.0 rot=(-58,0,34) "
-		"cast_shadows=%s" % (comp.get_editor_property("cast_shadows")
-							 if comp else "NO-COMPONENT"))
-	return light
+        say("sun created: intensity=10.0 rot=(-48,-135,0) "
+                "cast_shadows=%s" % (comp.get_editor_property("cast_shadows")
+                                                         if comp else "NO-COMPONENT"))
+        return light
 
 
 def make_skylight(world):
@@ -123,86 +132,100 @@ def make_skylight(world):
 
 
 def mute_legacy_clusters(world):
-	"""Stop the legacy voxel layer from casting shadows.
+        """Stop the legacy voxel layer from casting shadows.
 
-	The level still carries 1,041 MCReplicaPropCluster actors holding 1,171,144
-	instances from the original cube-layer pipeline. They are already hidden in
-	game, but an ISM component still gathers for the shadow pass, and with the
-	sun's shadows enabled that overflows the 16-bit mesh-draw-command index:
+        The level still carries 1,041 MCReplicaPropCluster actors holding 1,171,144
+        instances from the original cube-layer pipeline. They are already hidden in
+        game, but an ISM component still gathers for the shadow pass, and with the
+        sun's shadows enabled that overflows the 16-bit mesh-draw-command index:
 
-	    Assertion failed: NumAcceptedStaticMeshes >= 0 && MDCIdx < ((uint16) 0xffff)
-	    [File:.../Runtime/Renderer/Private/ShadowSetup.cpp] [Line: 1611]
+            Assertion failed: NumAcceptedStaticMeshes >= 0 && MDCIdx < ((uint16) 0xffff)
+            [File:.../Runtime/Renderer/Private/ShadowSetup.cpp] [Line: 1611]
 
-	That assertion kills the process on startup, so it blocks every visual check.
-	The clusters are a superseded crutch -- the terrain and structure meshes
-	replace them -- so muting them is the correct end state, not a workaround.
-	Their collision is left alone on purpose: the pawn still stands on
-	MCReplicaPropCluster_449, and removing that before the terrain has collision
-	would drop the player through the world.
-	"""
-	clusters = unreal.GameplayStatics.get_all_actors_of_class(
-		world, unreal.MCReplicaPropCluster)
-	muted = 0
-	for actor in clusters:
-		for comp in actor.get_components_by_class(
-				unreal.InstancedStaticMeshComponent):
-			try:
-				comp.set_editor_property("cast_shadow", False)
-				muted += 1
-			except Exception:
-				pass
-	# NOTE: as of this writing the mutation above does not stop the crash on its
-	# own -- an editor-side property write does not mark the render state dirty,
-	# so the shadow pass still gathers these clusters. Disabling the sun's
-	# shadows is what actually unblocks the renderer. Mute the clusters anyway:
-	# once the legacy layer is retired this becomes moot, and until then it is
-	# one less thing that can shadow the real geometry.
-	say("legacy voxel clusters: %d actors, %d components muted for shadows"
-		% (len(clusters), muted))
-	return muted
+        That assertion kills the process on startup, so it blocks every visual check.
+        The clusters are a superseded crutch -- the terrain and structure meshes
+        replace them -- so muting them is the correct end state, not a workaround.
+        Their collision is left alone on purpose: the pawn still stands on
+        MCReplicaPropCluster_449, and removing that before the terrain has collision
+        would drop the player through the world.
+        """
+        clusters = unreal.GameplayStatics.get_all_actors_of_class(
+                world, unreal.MCReplicaPropCluster)
+        muted = 0
+        for actor in clusters:
+                for comp in actor.get_components_by_class(
+                                unreal.InstancedStaticMeshComponent):
+                        try:
+                                comp.set_editor_property("cast_shadow", False)
+                                muted += 1
+                        except Exception:
+                                pass
+        # NOTE: as of this writing the mutation above does not stop the crash on its
+        # own -- an editor-side property write does not mark the render state dirty,
+        # so the shadow pass still gathers these clusters. Disabling the sun's
+        # shadows is what actually unblocks the renderer. Mute the clusters anyway:
+        # once the legacy layer is retired this becomes moot, and until then it is
+        # one less thing that can shadow the real geometry.
+        say("legacy voxel clusters: %d actors, %d components muted for shadows"
+                % (len(clusters), muted))
+        return muted
 
 
 def main():
-	subsystems = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-	world = subsystems.get_editor_world() if subsystems else None
-	if world is None:
-		# Fall back: the level actors list is available even when the world
-		# handle is not, which is enough to decide "do the lights already exist".
-		world = unreal.EditorLevelLibrary.get_editor_world()
-	if world is None:
-		say("FAIL: no editor world")
-		return 1
+        subsystems = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+        world = subsystems.get_editor_world() if subsystems else None
+        if world is None:
+                # Fall back: the level actors list is available even when the world
+                # handle is not, which is enough to decide "do the lights already exist".
+                world = unreal.EditorLevelLibrary.get_editor_world()
+        if world is None:
+                say("FAIL: no editor world")
+                return 1
 
-	sun = find_existing(world, unreal.DirectionalLight, "MC_Sun")
-	skylight = find_existing(world, unreal.SkyLight, "MC_SkyLight")
+        sun = find_existing(world, unreal.DirectionalLight, "MC_Sun")
+        skylight = find_existing(world, unreal.SkyLight, "MC_SkyLight")
 
-	if sun is None:
-		make_sun(world)
-	else:
-		say("sun already present, left alone")
-	if skylight is None:
-		make_skylight(world)
-	else:
-		say("skylight already present, left alone")
+        if sun is None:
+                make_sun(world)
+        else:
+                # Re-author the values even when the sun exists: the level
+                # currently carries the stale 4.0 / (-58,0,34) set from before
+                # the values were unified with ApplyLook. "Left alone" here
+                # meant one more run would silently keep the mismatch.
+                sun.set_editor_property("intensity", 10.0)
+                sun.set_editor_property("temperature_enabled", True)
+                sun.set_editor_property("temperature", 5600.0)
+                sun.set_actor_rotation(
+                        unreal.Rotator(-48.0, -135.0, 0.0, "XYZ"))
+                comp = sun.get_component_by_class(
+                        unreal.DirectionalLightComponent)
+                if comp:
+                        comp.set_editor_property("cast_shadows", False)
+                say("sun already present: re-authored to 10.0 / (-48,-135,0)")
+        if skylight is None:
+                make_skylight(world)
+        else:
+                skylight.set_editor_property("real_time_capture", True)
+                say("skylight already present: real_time_capture re-asserted")
 
-	mute_legacy_clusters(world)
+        mute_legacy_clusters(world)
 
-	# Census after, so the result is measured rather than assumed.
-	suns = unreal.GameplayStatics.get_all_actors_of_class(
-		world, unreal.DirectionalLight)
-	skies = unreal.GameplayStatics.get_all_actors_of_class(
-		world, unreal.SkyLight)
-	say("after: DirectionalLight=%d SkyLight=%d" % (len(suns), len(skies)))
+        # Census after, so the result is measured rather than assumed.
+        suns = unreal.GameplayStatics.get_all_actors_of_class(
+                world, unreal.DirectionalLight)
+        skies = unreal.GameplayStatics.get_all_actors_of_class(
+                world, unreal.SkyLight)
+        say("after: DirectionalLight=%d SkyLight=%d" % (len(suns), len(skies)))
 
-	if not suns:
-		say("FAIL: no DirectionalLight in the level after the fix -- nothing "
-			"will be lit")
-		return 1
+        if not suns:
+                say("FAIL: no DirectionalLight in the level after the fix -- nothing "
+                        "will be lit")
+                return 1
 
-	unreal.EditorLevelLibrary.save_current_level()
-	say("level saved")
-	say("done")
-	return 0
+        unreal.EditorLevelLibrary.save_current_level()
+        say("level saved")
+        say("done")
+        return 0
 
 
 if __name__ == "__main__":

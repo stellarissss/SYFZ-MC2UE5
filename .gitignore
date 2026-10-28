@@ -7,15 +7,15 @@
 #   * out/phase2/        第二阶段的最终产物（landscape PNG / json / debug 图）
 #
 # 不入库：
-#   * voxel_data/        可由 `parse_world.py --save <存档> --full` 一键重建
 #   * out/survey/*.npy   可由 `survey.py` 重算的稠密中间数组
+#   * voxel_data/*.npy 等稠密缓存（bin 本身入库，见下）
 #
-# 理由：assets 与 out/phase2 是「不重跑管线就拿不到」的东西，值得 review；
-# voxel_data 只是存档的另一种编码，存档本身才是 source of truth。把 144 MB
-# 的中间编码入库，既拖慢克隆，又在存档更新时产生无意义的二进制 diff。
+# 【2026-10-28 更正】原注释说 voxel_data「可由存档一键重建」——前提已失效：
+# MC 存档已永久丢失（REFACTOR_PLAN §6.1），voxel_data/full/*.bin 是项目
+# 唯一数据源。bin 走 LFS 入库（.gitattributes），本仓库不再忽略它；
+# 备份镜像另走 GitHub Release（tools/archive_data.py）。
 
 # ---- 可重建的中间产物 --------------------------------------------------
-voxel_data/
 *.npy
 *.npz
 
@@ -31,10 +31,18 @@ project/Packaged/
 project/Content/**/__pycache__/
 *.pyc
 
-# ---- 发行构建产物（tools/build_release_level.py 生成，422 MB）----------
-# 原则同 voxel_data：这些都是 build_release_level.py 一键重建的中间产物，
-# 入库只会在每次重建时产生几百 MB 的二进制 diff。发行包本身走 GitHub
-# Release（见 RELEASE_NOTES.md），不进 git。
+# ---- 生成内容与日志 ------------------------------------------------------
+# out/ 的稠密中间产物（npy/terrain_pack/vegetation_obj/structures …）可由
+# voxel_data 一键重建，不入库；但 out/phase2 与 out/survey 的**最终 JSON/PNG**
+# 是阶段产物（顶部「入库」清单仍有效），显式豁免。
+# 注意：voxel_data/ 本身已不再忽略 —— 存档永久丢失（REFACTOR_PLAN §6.1）
+# 后 overworld.bin 是唯一数据源，改走 LFS 入库（见 .gitattributes）。
+out/*
+!out/phase2/
+!out/survey/
+logs/             # MC_LOG_DIR 侧的报告（build_world/各编辑器脚本的产物）
+
+# ---- 生成内容（可由 tools 重建）------------------------------------------
 project/Content/MC/            # 地形网格 / 碰撞代理 / 材质 / 纹理 / 道具
 project/Content/Maps/          # MCReplica.umap + World Partition HLOD 层
 project/Content/__ExternalActors__/   # World Partition 的外部 actor
@@ -83,6 +91,3 @@ assets_cc0/**/*.jpg
 assets_cc0/**/*.png
 assets_cc0/**/*.part
 assets_cc0/**/*.exr
-
-# S1+ pipeline intermediates (regenerable; large npy volumes)
-out/

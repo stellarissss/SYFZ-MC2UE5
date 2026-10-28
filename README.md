@@ -4,6 +4,12 @@
 
 参考论文：*Minecraft to 3D*（SIGGRAPH Posters '25, DOI [10.1145/3721250.3743044](https://doi.org/10.1145/3721250.3743044)）
 
+> **重建与出包一条命令**：在 Windows 构建机上
+> `python tools\build_world.py` → `tools\build_shipping.bat` →
+> `tools\package_shipping.bat`，完整手册与验收清单见
+> [`docs/REBUILD.md`](docs/REBUILD.md)。
+> 当前状态与全部根因史见 [`REFACTOR_PLAN.md`](REFACTOR_PLAN.md) §8.43。
+
 ---
 
 ## 目标（开发前必读）

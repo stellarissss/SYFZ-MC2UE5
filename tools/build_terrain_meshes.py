@@ -63,9 +63,14 @@ import traceback
 
 import unreal
 
-REPO = "Q:/MC2UE5/repo"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACK = os.path.join(REPO, "out/terrain_pack")
-OUT = "Q:/MC2UE5/logs/build_terrain_meshes.txt"
+# MC_LOG_DIR overrides where every MC script writes its report; the default
+# keeps the historical location on this host (<repo>/../logs), so existing
+# reading habits and tooling keep working from a checkout at Q:/MC2UE5/repo.
+OUT = os.environ.get("MC_LOG_DIR",
+                     os.path.join(os.path.dirname(REPO), "logs",
+                                  "build_terrain_meshes.txt"))
 L = []
 
 
@@ -146,6 +151,16 @@ def build_tile(t):
             name, "/Game/MC/Terrain", unreal.StaticMesh, None)
     if asset is None:
         return {"name": name, "error": "could not create/load asset"}
+
+    # bAllowCPUAccess must be on BEFORE the render data is built, or the cooked
+    # complex-as-simple trimesh comes out empty (the lesson of
+    # refix_collision.py: the flag gates whether the built render data keeps a
+    # CPU-side index copy, and setting it afterwards changes nothing).
+    try:
+        asset.set_editor_property("allow_cpu_access", True)
+    except Exception as exc:
+        return {"name": name,
+                "error": "allow_cpu_access (pre-build): %s" % str(exc)[:140]}
 
     smd = asset.create_static_mesh_description()
     if smd is None:
@@ -248,6 +263,47 @@ def build_tile(t):
         return {"name": name,
                 "error": "normals written %s, expected %d"
                          % (written, want * 3)}
+
+    # ---- collision ---------------------------------------------------------
+    # This is the fix for "the visible terrain has no collision": until now the
+    # 24 tiles were built with no collision at all, and the pawn was silently
+    # standing on the *hidden* voxel layer's collision (ensure_lighting.py
+    # documents that state). Complex-as-simple gives per-triangle collision
+    # matching the smoothed surface exactly. The API sequence is the one proven
+    # in refix_collision.py; allow_cpu_access was already set before the build.
+    smes = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+    try:
+        smes.set_collision_complexity(
+            asset, unreal.CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE)
+    except Exception as exc:
+        try:
+            asset.set_editor_property(
+                "collision_complexity",
+                unreal.CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE)
+        except Exception as exc2:
+            return {"name": name,
+                    "error": "collision complexity: %s / %s"
+                             % (str(exc)[:80], str(exc2)[:80])}
+    try:
+        body = asset.get_editor_property("body_setup")
+        if body is not None:
+            body.set_editor_property(
+                "collision_trace_flag",
+                unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+    except Exception as exc:
+        say("  %-22s body_setup trace flag: %s (complexity is set; "
+            "continuing)" % (name, str(exc)[:100]))
+
+    # Read back what will actually be cooked -- a set flag that reads back as
+    # Default means the trimesh will be empty and the player will fall through.
+    try:
+        got_cc = smes.get_collision_complexity(asset)
+    except Exception:
+        got_cc = asset.get_editor_property("collision_complexity")
+    if str(got_cc) not in ("CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE",
+                           "CTC_USE_COMPLEX_AS_SIMPLE"):
+        return {"name": name,
+                "error": "collision complexity reads back as %s" % got_cc}
 
     unreal.EditorAssetLibrary.save_loaded_asset(asset)
 

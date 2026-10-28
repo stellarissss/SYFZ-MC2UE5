@@ -11,8 +11,12 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/apply_spawn.txt"
-SPEC = "Q:/MC2UE5/logs/spawn.json"
+_repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))   # Python -> Content -> project -> repo
+_logdir = os.environ.get("MC_LOG_DIR",
+                         os.path.join(os.path.dirname(_repo), "logs"))
+OUT = os.path.join(_logdir, "apply_spawn.txt")
+SPEC = os.path.join(_logdir, "spawn.json")
 L = []
 
 
@@ -33,8 +37,16 @@ try:
     if not starts:
         raise SystemExit
 
-    loc = unreal.Vector(v["spawn_cm"][0], v["spawn_cm"][1], v["spawn_cm"][2])
-    rot = unreal.Rotator(pitch=0.0, yaw=v["yaw"], roll=0.0)
+    # Coordinate convention (the mirror fix, REFACTOR_PLAN §8.43):
+    # pick_spawn reports Minecraft-space truth (spawn_cm Y = mc_z * 100), but
+    # the level's terrain/structures live in the IMPORTER's basis,
+    # (x, y, z) -> (x, -y, z). Placing the PlayerStart at the raw positive Y
+    # put it in the mirrored half -- on the opposite side of the campus from
+    # the spot the voxel search actually verified. Negate Y (and mirror the
+    # yaw, direction (dx, dz) -> (dx, -dz)) so the pawn spawns at the intended
+    # MC location in the world that actually renders.
+    loc = unreal.Vector(v["spawn_cm"][0], -v["spawn_cm"][1], v["spawn_cm"][2])
+    rot = unreal.Rotator(pitch=0.0, yaw=-v["yaw"], roll=0.0)
     t = starts[0]
     t.set_actor_location(loc, False, True)
     t.set_actor_rotation(rot, False)

@@ -1417,5 +1417,89 @@ Assertion failed: NumAcceptedStaticMeshes >= 0 && MDCIdx < ((uint16) 0xffff)
 brick_pink/fabric_green/fabric_lime/fabric_white、182 个网格 actor 全部
 `visible=True` 且未隐藏、关卡含 DirectionalLight=1 + SkyLight=1。
 
+### 8.43 【2026-10-28】镜像世界根因 + 全量修复轮（外部审查：游星）
+
+**本轮起因**：用户报告「完全不能游玩（视觉错误）+ 与目标偏移严重」。
+外部审查（本节作者）通读全部代码/文档/提交后定位出**一个从未被记载、
+比 §8.36 审计表更深一层的结构性根因**，并完成全量修复。
+
+#### 8.43.1 根因：关卡里存在**两份镜像校园**
+
+体素链与 OBJ 链对「MC z → UE Y」用了**相反的符号**：
+
+| 内容 | 放置方式 | Y 符号 |
+|---|---|---|
+| 158 结构网格 / 旧地形 OBJ | Interchange OBJ 导入器 | **-(mc z)**（导入器基准变换 `(x,y,z)→(x,-y,z)`，50cd37f 提交原文自证） |
+| 24 新地形瓦片 | pack_terrain_tiles 直建 | **-(mc z)**（显式复刻导入器变换，与结构一致） |
+| 旧体素层（1041 簇/1.17M 实例） | import_world 直接摆 HISM 实例 | **+(mc z)**（`import_world.py:1160` `Vector(cell_x·S, cell_z·S, 0)`，不经导入器） |
+| PlayerStart / C++ 导览机位 / 碰撞探针 | 直接写坐标 | **+(mc z)**（pick_spawn/GTourStops 原值） |
+
+⇒ 关卡同时装着**互为镜像的两份校园**（绕 z=0 反射）。历史观测全部对上：
+s6a「结构 toggle 只变 0.15% 帧素」不是光照问题——结构在镜像半区，相机
+看的是体素半区；「pawn 站在 MCReplicaPropCluster_449 上」的碰撞地板与
+可见地形分属两个半球，平滑量 Δh 直接读成「悬空/陷脚」；出生点搜索在体素
+世界验证过「不在树里」，实际出生在镜像世界未验证的位置。**所有逐层验收
+（bbox/三角数/可见性）都是层内自洽，从未做跨层比对**——§8.9 的
+ref_map 对照被规划了但从未执行，这就是它一直没暴露的原因。
+
+#### 8.43.2 修复清单（全部落盘，验证状态逐条标注）
+
+1. **出生点进正确半球**：`apply_spawn.py` 对 spawn_cm 取 Y 负 + yaw 镜像
+   （`(dx,dz)→(dx,-dz)`）。pick_spawn 保持 MC 空间真值，转换只在这一处。
+   ✅代码级验证（无 UE 实测）
+2. **导览机位进正确半球**：`GTourStops` 五个 Y 取负，yaw 随反射镜像
+   （180→180、225→135、-90→90）。✅同上
+3. **植被 S4.5 落地（0 树 → 全量）**：`tools/build_vegetation_pack.py`
+   以 `emit()`（结构链同款 mesher/UV/槽位）把全部 VEGETATION 体素按
+   64 块 X 条带发射 OBJ；`build_vegetation_meshes.py` 走**OBJ 导入器**
+   （壳类 100% 面保留有实测；且自动继承镜像变换——天然落进正确半球）。
+   ✅合成体素回归测试 `tests/test_vegetation_pack.py` 17/17 PASS
+   （面数/平法线/绕向/剔除/usemtl/块 UV/坐标约定）
+4. **地形碰撞（P0）**：`build_terrain_meshes.py` 在渲染数据构建**前**设
+   `allow_cpu_access`（refix_collision 的顺序教训），构建后设
+   `CTC_USE_COMPLEX_AS_SIMPLE` + body_setup trace flag + **回读断言**。
+   ✅代码级（编辑器侧待跑）
+5. **体素层碰撞退役（带门控）**：`hide_voxel_layer.py` 先逐瓦片验证地形
+   complex-as-simple 成立，才禁用 1041 簇碰撞；不成立则 FAIL 并拒绝动。
+   ✅代码级
+6. **灯光单源**：`ensure_lighting.py` 与 ApplyLook 对齐（10 lux /
+   (-48,-135,0) / realtime sky），重跑时**强制重写**存量灯（不再"left
+   alone"保陈旧值）。✅代码级
+7. **诊断路径可移植**：C++ 六处 `Q:/MC2UE5/logs` → `MCTextLogPath()`
+   （-MClogdir= > MC_LOG_DIR > ProjectSaved/MCLogs 三级回退）；
+   `MCFrameCapture.cpp` 修掉「GetBaseFilename 丢目录」bug（PNG 曾落到
+   进程 CWD）。✅人工复核（**未经编译**，见 8.43.3）
+8. **一键重建**：`tools/build_world.py` 编排数据侧 5 步 + 编辑器侧 7 步
+   （MC_STAGE 环境变量传参，§8.6 的教训），逐步判 PASS，产出
+   `logs/build_world_report.json` = 可复现记录。旧入口
+   `build_release_level.py` 加 `MC_ALLOW_LEGACY=1` 闸门（不再可能静默
+   重建 v0.7.0 旧世界）。✅py_compile + 流程级
+9. **数据保险**：`.gitignore`/`.gitattributes` 解除 voxel_data 忽略、
+   bin 走 LFS（注意 gitattributes 顺序：精确覆盖必须在 `*.bin` 通配后）；
+   `tools/archive_data.py`/`restore_data.py` 把 bin + 关卡快照推/拉
+   GitHub Release（token 只认 env/.gh_token，不进 argv 不进库）。
+   ✅结构级（上传动作在用户机执行）
+
+#### 8.43.3 未验证声明（诚实边界）
+
+- **C++ 修改未经编译**（本机无 UE/MSVC）：MCConsoleCommands 的路径助手
+  与 GTourStops、MCFrameCapture 的路径修复，需 `build_shipping.bat`
+  首编时检验；改动均为机械替换，不引入新依赖（PlatformMisc 头已补）。
+- **编辑器侧脚本未实跑**（同上）：build_terrain_meshes 的碰撞插入、
+  build_vegetation_meshes 的导入链、hide_voxel_layer 的门控，全部只用
+  本仓库已验证过的 API 序列（import_obj/bind_slots/CDO 设置/
+  set_collision_complexity/save_current_level）。
+- **两半球合并后的视觉验收仍未做**：必须按 `docs/REBUILD.md` 跑完
+  build_world → package 后，用 ref_map（§8.9）做第一次跨层像素对照——
+  这是八轮修复里第一次真正可能过「对应性」验收的状态。
+
+#### 8.43.4 既有分歧（本轮未动，需要决策）
+
+`tests/test_hism_culling.py` 在 HEAD 基线上就有 2 项 FAIL（已用 stash
+复现证实，与本轮无关）：测试期望方块层剔除距离 ≥ 200 m、Low 档 ≥ 100 m，
+代码实际是 80→140 m、Low 档有效 56 m。这是「性能实测值」与「验收期望」
+的分歧——放宽测试还是拉远剔除，属于观感/性能权衡，应由实机帧时数据
+决定，本轮不擅自改游戏参数。
+
 ---
-*本文档为唯一权威计划。S0 定架构，S1–S4 已回填，S5 见 §8，S4.5 见 §8.10，S5.5/5.6 见 §8.13–8.42。*
+*本文档为唯一权威计划。S0 定架构，S1–S4 已回填，S5 见 §8，S4.5 见 §8.10，S5.5/5.6 见 §8.13–8.43。*

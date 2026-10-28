@@ -27,12 +27,16 @@
 *.umap   filter=lfs diff=lfs merge=lfs -text
 *.fbx    filter=lfs diff=lfs merge=lfs -text
 
-# *.bin 目前不入库（见 .gitignore：voxel_data/ 是可由 parse_world.py --full
-# 重建的中间编码，存档本身才是 source of truth）。这里显式关掉 LFS 过滤，
-# 避免日后若改为入库时，"文件被 add 了却没进 LFS"这种半吊子状态悄悄发生；
-# 真要入库，把下面这行换成 *.bin filter=lfs ... 并同步删掉 .gitignore 里的
-# voxel_data/ 排除规则。
+# 其余 .bin（构建侧临时产物等）保持普通 Git 语义。
 *.bin    filter= diff= merge= -text
+
+# 【2026-10-28 起启用】voxel_data/*.bin 改走 LFS 入库：原前提「可由存档一键
+# 重建」已失效——MC 存档永久丢失（REFACTOR_PLAN §6.1），overworld.bin
+# (144 MB, 超过 GitHub 100 MB blob 上限) 是项目唯一数据源。公开仓库 LFS
+# 免费；Release 镜像备份另见 tools/archive_data.py。.gitignore 已同步解除
+# voxel_data/ 的忽略（npz/npy 缓存仍忽略）。
+# 顺序要紧（本文件开头第 3 条踩坑笔记）：精确覆盖必须排在 *.bin 通配**之后**。
+voxel_data/**/*.bin filter=lfs diff=lfs merge=lfs -text
 
 # ---- 精确覆盖：phase2 产物留在普通 Git ----------------------------------
 # 顺序要紧：以下每一行都必须在上面之后。

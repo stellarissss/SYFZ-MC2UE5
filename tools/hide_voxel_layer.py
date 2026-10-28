@@ -31,7 +31,10 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/hide_voxel_layer.txt"
+OUT = os.environ.get("MC_LOG_DIR",
+                     os.path.join(os.path.dirname(os.path.dirname(
+                         os.path.abspath(__file__))), "..", "logs",
+                         "hide_voxel_layer.txt"))
 MAP = "/Game/Maps/MCReplica"
 L = []
 
@@ -113,6 +116,78 @@ def main():
             % (n_vox, changed))
         say("  -> voxel layer is now %s"
             % ("VISIBLE" if unhide else "HIDDEN"))
+
+        # ---- collision -----------------------------------------------------
+        # The voxel layer's collision used to be kept on deliberately, because
+        # the visible terrain had none and the pawn would have fallen through
+        # the world (ensure_lighting.py documents that state). Now that the
+        # terrain tiles are built with complex-as-simple collision
+        # (build_terrain_meshes.py), the hidden layer's collision is an
+        # invisible duplicate of the world -- it disagrees with the smoothed
+        # terrain by up to the smoothing delta, which reads as floating or
+        # sunken feet. Remove it, but ONLY if every terrain tile actually has
+        # collision; fail loudly rather than drop the player through the floor.
+        if unhide:
+            for a in actors:
+                if a.get_class().get_name() != "MCReplicaPropCluster":
+                    continue
+                try:
+                    a.set_actor_enable_collision(True)
+                except Exception as exc:
+                    say("  set_actor_enable_collision(True) failed on %s: %s"
+                        % (label(a), str(exc)[:60]))
+            say("collision: re-enabled on all voxel clusters (unhide mode)")
+        else:
+            smes = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+            tiles_ok = 0
+            tiles_bad = []
+            for a in actors:
+                if a.get_class().get_name() != "StaticMeshActor":
+                    continue
+                c = a.get_component_by_class(unreal.StaticMeshComponent)
+                m = c.get_editor_property("static_mesh") if c else None
+                mname = m.get_name() if m else ""
+                is_tile = (label(a).startswith("terrain_")
+                           or "terrain_" in mname or "terrain_" in label(a))
+                if not is_tile:
+                    continue
+                if m is None:
+                    tiles_bad.append("%s: no mesh" % label(a))
+                    continue
+                try:
+                    cc = str(smes.get_collision_complexity(m))
+                except Exception:
+                    try:
+                        cc = str(m.get_editor_property("collision_complexity"))
+                    except Exception as exc:
+                        tiles_bad.append("%s: %s" % (label(a), str(exc)[:60]))
+                        continue
+                if "USE_COMPLEX_AS_SIMPLE" in cc:
+                    tiles_ok += 1
+                else:
+                    tiles_bad.append("%s: complexity=%s" % (label(a), cc))
+            say("collision gate: %d terrain tiles with complex-as-simple, "
+                "%d without" % (tiles_ok, len(tiles_bad)))
+            for b in tiles_bad[:10]:
+                say("  ! %s" % b)
+            if tiles_ok > 0 and not tiles_bad:
+                ncol = 0
+                for a in actors:
+                    if a.get_class().get_name() != "MCReplicaPropCluster":
+                        continue
+                    try:
+                        a.set_actor_enable_collision(False)
+                        ncol += 1
+                    except Exception as exc:
+                        say("  set_actor_enable_collision(False) failed on "
+                            "%s: %s" % (label(a), str(exc)[:60]))
+                say("collision: disabled on %d voxel clusters "
+                    "(terrain collision verified first)" % ncol)
+            else:
+                ok = False
+                say("collision: NOT disabled -- rebuild the terrain with "
+                    "build_terrain_meshes.py (it now sets collision) before "
+                    "hiding this layer, or the pawn falls through the world")
 
         les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
         say("save_current_level -> %s" % les.save_current_level())

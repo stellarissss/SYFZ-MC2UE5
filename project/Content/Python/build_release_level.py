@@ -1983,6 +1983,22 @@ def verify(meshes_placed, props_placed):
 # =============================================================================
 
 def run():
+    # ---- legacy guard -----------------------------------------------------
+    # This script is the ORIGINAL 4-tile OBJ/Landscape release chain (v0.7.0).
+    # The current level is the 24-tile MeshDescription chain assembled by
+    # tools/build_world.py; running this script now would rebuild the old
+    # world over it. It is kept for archaeology and only runs with the
+    # explicit opt-in below.
+    import os as _os
+    if _os.environ.get("MC_ALLOW_LEGACY", "0") != "1":
+        log("=" * 70)
+        log("LEGACY SCRIPT -- refusing to run.")
+        log("  This builds the retired v0.7.0 world (4 OBJ terrain tiles,")
+        log("  primitive props). The current pipeline is one command:")
+        log("    python tools/build_world.py")
+        log("  To run this legacy chain anyway: set MC_ALLOW_LEGACY=1")
+        return 1
+
     log("=" * 70)
     log("MC2UE5 release level build | dimension=%s" % DIMENSION)
     log("=" * 70)

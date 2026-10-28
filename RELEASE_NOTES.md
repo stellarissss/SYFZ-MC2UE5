@@ -6,6 +6,27 @@ A Minecraft 1.16.5 save rebuilt as a walkable UE5 world.
 
 ---
 
+> ## v0.8.0（未发布，代码已就绪待出包）
+>
+> 2026-10-28 修复轮（根因与细节见 `REFACTOR_PLAN.md` §8.43）：
+>
+> * **镜像世界根因修复**：关卡此前并存两份互为镜像的校园（OBJ 链
+>   `-(mc z)` vs 直摆链 `+(mc z)`）。出生点、导览机位、体素层碰撞均已
+>   收敛到渲染所在的半球；
+> * **地形获得碰撞**：24 瓦片 complex-as-simple（此前玩家站在被隐藏的
+>   体素层碰撞上，与可见地形存在平滑高差）；
+> * **植被 S4.5 落地**：47,671 块 VEGETATION 体素全部网格化（此前 0 树）；
+> * **体素层碰撞退役**（地形碰撞逐瓦片验证通过后，门控禁用）；
+> * 灯光单源、C++ 诊断路径可移植（-MClogdir=/MC_LOG_DIR/ProjectSaved 三级
+>   回退）+ MCFrameCapture 路径 bug 修复；
+> * `tools/build_world.py` 一键重建 + `docs/REBUILD.md` 验收手册
+>   （含 ref_map 跨层对应性验收——历史上第一次执行）；
+> * 数据保险：voxel_data 走 LFS/Release 归档（存档已永久丢失）。
+>
+> **获取本版**：仓库 HEAD + `python tools\build_world.py` + 两个 bat。
+
+---
+
 > ## ⚠️ 已知 P0：渲染不符合项目目标（正在重制）
 >
 > **本版的画面不可作为交付。** 实机验证显示：
