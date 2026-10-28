@@ -205,7 +205,7 @@ run3: worldSec= 95 | stalls>1s=[12484, 76070]                | 重复停顿=0
 
 6. **cook 必须两步**(`-SkipZenStore` 单独 cook,再 `-skipcook` 打包)。
    直接 `BuildCookRun -cook` 会因 Zen oplog `HTTP NotFound` 失败。
-   完整可用的 bat 在 `Q:/MC2UE5/shots/{build_shipping2.bat,cook_p0.bat}`。
+   完整可用的 bat 在 `G:/BaiduNetdiskDownload/real/MC2UE5/shots/{build_shipping2.bat,cook_p0.bat}`。
 
 ---
 
@@ -221,7 +221,7 @@ run3: worldSec= 95 | stalls>1s=[12484, 76070]                | 重复停顿=0
 **已交付:**
 - `Source/MCReplica/Public/MCLayerControl.h` + `Private/MCLayerControl.cpp`(新增)
 - `Source/MCReplica/Private/MCConsoleCommands.cpp`(诊断门控、采样上限、ApplyLook 幂等、`-MClook`)
-- `Q:/MC2UE5/shots/measure_run.py`(外部进程级采样工具)
+- `G:/BaiduNetdiskDownload/real/MC2UE5/shots/measure_run.py`(外部进程级采样工具)
 
 **未做 / 待你决定:**
 - **未删除体素层**(S6,等你签字)

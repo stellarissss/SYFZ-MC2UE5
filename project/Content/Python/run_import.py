@@ -5,5 +5,5 @@ try:
     import import_world
     import_world.run()
 except Exception:
-    open("Q:/MC2UE5/logs/run_import_err.txt", "w").write(traceback.format_exc())
+    open("G:/BaiduNetdiskDownload/real/MC2UE5/logs/run_import_err.txt", "w").write(traceback.format_exc())
     raise

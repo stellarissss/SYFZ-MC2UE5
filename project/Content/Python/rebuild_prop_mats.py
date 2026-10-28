@@ -2,14 +2,14 @@
 """Rebuild the prop materials with a Constant3Vector tint."""
 import traceback
 import unreal
-OUT = "Q:/MC2UE5/logs/prop_mats.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/prop_mats.txt"
 lines = []
 def say(m):
     lines.append(str(m)); unreal.log("[MCPM] " + str(m))
     open(OUT, "w").write("\n".join(lines) + "\n")
 try:
     import sys
-    sys.path.insert(0, r"Q:/MC2UE5/repo/project/Content/Python")
+    sys.path.insert(0, r"G:/BaiduNetdiskDownload/real/MC2UE5/repo/project/Content/Python")
     import build_release_level as B
     say("imported")
     mats = B._prop_materials()

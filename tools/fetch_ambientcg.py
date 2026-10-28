@@ -33,7 +33,7 @@ REPO = os.path.dirname(HERE)
 #: Where the fetched maps land. Outside the repo, alongside the existing
 #: polyhaven tree, for the same reason build_atlas.py's default --assets is:
 #: the in-repo assets_cc0 is a stub and binaries do not belong in git.
-DEST = "Q:/MC2UE5/assets_cc0/ambientcg"
+DEST = "G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/ambientcg"
 
 #: family -> ambientCG asset id. The eight re-sourced families come straight
 #: from spec section 3; `path` is PavingStones103, which the spec calls the

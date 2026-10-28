@@ -23,7 +23,7 @@ Run inside the editor:
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/render_diag.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/render_diag.txt"
 _lines = []
 
 

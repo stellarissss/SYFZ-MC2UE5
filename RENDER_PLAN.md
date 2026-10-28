@@ -85,7 +85,7 @@ DirectionalLight + SkyLight + SkyAtmosphere + Fog 齐全，但没有 Lumen GI、
    （带 `Authorization: Basic <base64(user:token)>`），返回带签名的 `href`；
 2. `media.githubusercontent.com` 与 `raw.githubusercontent.com` 都**只给指针**，
    不能用 —— 必须走 batch 端点拿签名 URL。
-3. 脚本：`Q:\MC2UE5\fetch_voxel.py`（校验 sha256 + size 后才落盘）。
+3. 脚本：`G:\BaiduNetdiskDownload\real\MC2UE5\fetch_voxel.py`（校验 sha256 + size 后才落盘）。
 
 **⇒ 「忠实立面」路线不再被阻塞，本方案按此执行。**
 

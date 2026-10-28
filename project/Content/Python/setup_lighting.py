@@ -31,7 +31,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/setup_lighting.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/setup_lighting.txt"
 L = []
 
 #: Clear-sky midday sun, in lux. The single source of truth for scene brightness.

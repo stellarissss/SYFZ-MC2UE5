@@ -11,7 +11,7 @@ voxel-on/voxel-off comparison is only meaningful if you read back what the parse
 actually produced for each run. Otherwise the two arms can be the same state and
 the measured difference is noise.
 
-The game writes every parse to `Q:/MC2UE5/logs/mclayers.txt` (appended). This
+The game writes every parse to `G:/BaiduNetdiskDownload/real/MC2UE5/logs/mclayers.txt` (appended). This
 driver snapshots the file size before each launch and reads only the new bytes,
 so each run's spec is attributed to that run.
 
@@ -23,7 +23,7 @@ The expected values are printed next to the observed ones and a verdict is given
 so a run where the switch did not take effect is reported rather than compared.
 
 Run outside the editor:
-  Q:/MC2UE5/venv/Scripts/python.exe tools/voxel_ab.py --stop 3 --wait 115
+  G:/BaiduNetdiskDownload/real/venv/Scripts/python.exe tools/voxel_ab.py --stop 3 --wait 115
 
 Read-only with respect to assets; it only launches the game and reads logs.
 """
@@ -34,11 +34,11 @@ import subprocess
 import sys
 import time
 
-GAME_EXE = "Q:/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
-PROJECT = "Q:/MC2UE5/repo/project/MCReplica.uproject"
-FOCUS = "Q:/MC2UE5/tools/focus_capture.py"
-SHOTS = "Q:/MC2UE5/shots"
-LOG_DIR = "Q:/MC2UE5/logs"
+GAME_EXE = "G:/BaiduNetdiskDownload/real/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
+PROJECT = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/project/MCReplica.uproject"
+FOCUS = "G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py"
+SHOTS = "G:/BaiduNetdiskDownload/real/MC2UE5/shots"
+LOG_DIR = "G:/BaiduNetdiskDownload/real/MC2UE5/logs"
 LAYER_LOG = os.path.join(LOG_DIR, "mclayers.txt")
 
 # name -> list of extra args (the toggle under test)

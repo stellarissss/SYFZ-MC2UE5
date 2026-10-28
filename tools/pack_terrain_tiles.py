@@ -27,7 +27,7 @@ editor side a dumb array reader.
 
 Run with the project venv:
 
-    Q:/MC2UE5/venv/Scripts/python.exe tools/pack_terrain_tiles.py
+    G:/BaiduNetdiskDownload/real/venv/Scripts/python.exe tools/pack_terrain_tiles.py
 """
 
 import argparse

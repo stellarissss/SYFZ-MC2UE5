@@ -26,10 +26,10 @@ import traceback
 
 import unreal
 
-SRC_ROOT = "Q:/MC2UE5/assets_cc0/polyhaven"
+SRC_ROOT = "G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/polyhaven"
 DEST_ROOT = "/Game/MC/CC0"
 MASTER_PATH = "/Game/MC/CC0/M_MC_Surface"
-OUT = "Q:/MC2UE5/logs/import_cc0.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/import_cc0.txt"
 
 #: family -> (diffuse, normal, roughness) file names, as written by
 #: tools/fetch_cc0_textures.py

@@ -18,7 +18,7 @@ Run: UnrealEditor-Cmd.exe MCReplica.uproject \
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/probe_material_api.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/probe_material_api.txt"
 _lines = []
 
 

@@ -32,7 +32,7 @@ Run inside the editor:
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/fix_render.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/fix_render.txt"
 MATERIAL_DIR = "/Game/MC/Materials"
 TERRAIN_MAT = "/Game/MC/Materials/MC_Terrain"
 PROBE_MAT = "/Game/MC/Materials/MC_ConnProbe"

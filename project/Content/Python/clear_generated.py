@@ -18,7 +18,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/clear_generated.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/clear_generated.txt"
 PREFIXES = ("Terrain_", "TerrainCollision_", "Props_", "MCblk_")
 _lines = []
 

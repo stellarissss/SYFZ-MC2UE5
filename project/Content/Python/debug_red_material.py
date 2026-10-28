@@ -23,7 +23,7 @@ DEBUG_MAT = "/Game/MC/Materials/MC_DebugRed"
 REAL_MAT = "/Game/MC/Materials/MC_Terrain"
 TILES = ("T_overworld_00_00", "T_overworld_00_01",
          "T_overworld_01_00", "T_overworld_01_01")
-REPORT = "Q:/MC2UE5/logs/debug_red.txt"
+REPORT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/debug_red.txt"
 _lines = []
 
 

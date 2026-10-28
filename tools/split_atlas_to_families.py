@@ -90,8 +90,8 @@ MANIFEST = "out/atlas/manifest.json"
 
 #: Where the CC0 downloads live. OUTSIDE the repo (the in-repo
 #: assets_cc0/polyhaven is an empty stub), same as `build_atlas.py` defaults.
-AMBIENTCG_DIR = "Q:/MC2UE5/assets_cc0/ambientcg"
-POLYHAVEN_DIR = "Q:/MC2UE5/assets_cc0/polyhaven"
+AMBIENTCG_DIR = "G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/ambientcg"
+POLYHAVEN_DIR = "G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/polyhaven"
 
 #: Output edge in texels. The atlas cell is 504 px, which is not a power of
 #: two; every per-family texture here is sampled with Wrap and put through mip

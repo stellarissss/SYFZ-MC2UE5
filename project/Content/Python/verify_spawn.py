@@ -15,7 +15,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/verify_spawn.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/verify_spawn.txt"
 _lines = []
 
 

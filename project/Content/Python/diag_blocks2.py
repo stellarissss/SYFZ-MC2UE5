@@ -3,7 +3,7 @@
 import traceback
 import unreal
 
-OUT = "Q:/MC2UE5/logs/diag_blocks2.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/diag_blocks2.txt"
 L = []
 def say(s):
     L.append(str(s)); unreal.log("[MCDIAG2] " + str(s))

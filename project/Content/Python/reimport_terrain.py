@@ -27,9 +27,9 @@ import os
 import unreal
 
 MESH_DIR = "/Game/MC/Terrain"
-OBJ_DIR = "Q:/MC2UE5/terrain"
+OBJ_DIR = "G:/BaiduNetdiskDownload/real/MC2UE5/terrain"
 TERRAIN_MATERIAL = "/Game/MC/Materials/MC_Terrain"
-REPORT_PATH = "Q:/MC2UE5/logs/reimport_terrain.txt"
+REPORT_PATH = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/reimport_terrain.txt"
 
 TILES = ("overworld_00_00", "overworld_00_01",
          "overworld_01_00", "overworld_01_01")

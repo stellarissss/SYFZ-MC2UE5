@@ -23,7 +23,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/spawn_vantage.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/spawn_vantage.txt"
 SPAWN_CM = (15000.0, -25000.0, 600.0)   # middle of the densest structural cell
 YAW = 261.0                             # toward the buildings at (11000, -49500)
 _lines = []

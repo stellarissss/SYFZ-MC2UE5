@@ -16,7 +16,7 @@ Run inside the editor:
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/material_dump.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/material_dump.txt"
 _lines = []
 
 

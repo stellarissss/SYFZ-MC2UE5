@@ -40,7 +40,7 @@
 
 ## 1. 实测口径
 
-用 `Q:\MC2UE5\venv\Scripts\python.exe` 从 `out/materials/voxelmat.npz` 统计（全 448×72×768 体素）。
+用 `G:\BaiduNetdiskDownload\real\venv\Scripts\python.exe` 从 `out/materials/voxelmat.npz` 统计（全 448×72×768 体素）。
 
 ### 1.1 计数
 

@@ -25,7 +25,7 @@ import time
 
 import unreal
 
-OUT_DIR = os.environ.get("MC2UE5_SHOT_DIR", r"Q:\MC2UE5\shots")
+OUT_DIR = os.environ.get("MC2UE5_SHOT_DIR", r"G:\BaiduNetdiskDownload\real\MC2UE5\shots")
 SHOT_NAME = "mcframe.png"
 
 _t0 = time.time()

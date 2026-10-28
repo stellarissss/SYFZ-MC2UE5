@@ -12,7 +12,7 @@
 > **实际链路**（`project/Content/Python/build_release_level.py` + C++）：
 > 地形在运行时由 C++ 从 `project/Terrain/<tile>.u16` 三角化
 > （`AMCFrameCaptureGameMode::BuildProceduralTerrain`），道具用实例化簇
-> （`MCReplicaPropCluster`），打包走 `Q:\MC2UE5\package.bat`。
+> （`MCReplicaPropCluster`），打包走 `G:\BaiduNetdiskDownload\real\MC2UE5\package.bat`。
 > 下文的导入脚本流程仅作历史参考。渲染重制方案见
 > [`../RENDER_PLAN.md`](../RENDER_PLAN.md)。
 
@@ -22,16 +22,16 @@
 
 | 项 | 要求 |
 |---|---|
-| 引擎 | **UE 5.8.3**（本机安装于 `Q:\UE\UE_5.8`） |
+| 引擎 | **UE 5.8.3**（本机安装于 `G:\BaiduNetdiskDownload\real\UE\UE_5.8`） |
 | 显卡 | 需真实 GPU + 渲染上下文；**渲染验证不要加 `-nullrhi`**（会把画面关掉） |
 | 内存 | 建世界峰值很高，见 §5 的量级估算；建议 ≥ 32 GB，系统盘留 ≥ 60 GB |
 | 磁盘 | 工程本体 + 生成的 Content + cook 产物，合计数十 GB |
-| Python | 编辑器自带；外部脚本用 `Q:\MC2UE5\venv` |
-| 编译环境 | MSVC 在 `Q:\VSBuildTools`、Windows SDK 在 `Q:\WindowsKits`。**C 盘被清后注册表会丢**，须先跑 `tools/reg_sdk.py` 再编译 |
+| Python | 编辑器自带；外部脚本用 `G:\BaiduNetdiskDownload\real\venv` |
+| 编译环境 | MSVC 在 `G:\BaiduNetdiskDownload\real\VSBuildTools`、Windows SDK 在 `G:\BaiduNetdiskDownload\real\WindowsKits`。**C 盘被清后注册表会丢**，须先跑 `tools/reg_sdk.py` 再编译 |
 
 > **关于 `EngineAssociation`**
 > 本机 `.uproject` 里是 `"EngineAssociation": ""`（源码构建版，靠
-> `Q:\UE\UE_5.8` 直接打开，不依赖 Launcher 关联名）。若双击 `.uproject`
+> `G:\BaiduNetdiskDownload\real\UE\UE_5.8` 直接打开，不依赖 Launcher 关联名）。若双击 `.uproject`
 > 弹出「选择引擎」，指向本机引擎目录即可。
 
 ---

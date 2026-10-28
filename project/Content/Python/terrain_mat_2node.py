@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Terrain material in the shape that is known to compile (see MC_Character)."""
 import unreal
-OUT = "Q:/MC2UE5/logs/terrain_mat_2node.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/terrain_mat_2node.txt"
 path = "/Game/MC/Materials/MC_Terrain"
 if unreal.EditorAssetLibrary.does_asset_exist(path):
     unreal.EditorAssetLibrary.delete_asset(path)

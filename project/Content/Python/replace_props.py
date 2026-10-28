@@ -19,7 +19,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/replace_props.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/replace_props.txt"
 _lines = []
 
 
@@ -35,7 +35,7 @@ def main():
     # Imported here, not at module scope: a failure in the builder module must
     # surface in this report rather than killing the editor before it can write
     # anything at all.
-    sys.path.insert(0, r"Q:\MC2UE5\repo\project\Content\Python")
+    sys.path.insert(0, r"G:\BaiduNetdiskDownload\real\MC2UE5\repo\project\Content\Python")
     try:
         import build_release_level as B
         say("imported build_release_level")

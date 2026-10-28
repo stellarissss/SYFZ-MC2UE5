@@ -452,7 +452,7 @@ lime_wool + green_wool = 18,199 块全部落进近白的 `fabric` 族
 | 1 | 旧体素层仍在关卡里 | `mc_runtime.txt` 11:50：`propISM=1041 propInst=1171144` | S6 删除；`MCLayerControl.h` 的 `bVox=true` 默认要改 |
 | 2 | 上帝文件 | `MCConsoleCommands.cpp` **1,614 行**（前文记 1,464，已增长） | S7 拆为 GameMode / Look / Diagnostics / Tour |
 | 3 | `docs/` **未被 git 跟踪** | `git ls-files docs/` 为空；5 份文档只在本机 | 立即入库（含本文件引用的 `s5_material_spec.md`、`qa_s5_report.md`） |
-| 4 | **两套 `tools/` 树** | `repo/tools` 35 个 · `Q:/MC2UE5/tools` 13 个，**零重叠**；且有重复功能（`fetch_lfs.py` vs `fetch_lfs_object.py`/`fetch_lfs_raw.py`） | 收敛到 `repo/tools/`，硬编码绝对路径改为参数 |
+| 4 | **两套 `tools/` 树** | `repo/tools` 35 个 · `G:/BaiduNetdiskDownload/real/MC2UE5/tools` 13 个，**零重叠**；且有重复功能（`fetch_lfs.py` vs `fetch_lfs_object.py`/`fetch_lfs_raw.py`） | 收敛到 `repo/tools/`，硬编码绝对路径改为参数 |
 | 5 | **6 份并列计划文档** | `README` / `PHASE2_PLAN` / `QUALITY_TIERS` / `RENDER_PLAN` / `REFACTOR_PLAN` / `RELEASE_NOTES` | 收敛为「本文件 = 唯一权威计划」+ README 现状描述，其余归档 |
 | 6 | Shipping 包内容为空 | `dist52/MCReplica/Content/` 只有 `Paks/`；`Paks/` 目录**为空** | 未解决；UAT stage 不复制项目 Content |
 | 7 | 无单一管线入口 | S8 未做 | `tools/pipeline.py` 一条命令跑全链 |
@@ -519,7 +519,7 @@ lime_wool + green_wool = 18,199 块全部落进近白的 `fabric` 族
 
 | 用途 | 可用 | 不可用（禁用） |
 |---|---|---|
-| 取像 | `Q:/MC2UE5/tools/focus_capture.py`（PrintWindow + PW_RENDERFULLCONTENT） | `MCFrameCapture`（`Viewport->ReadPixels` 返回纯白，§1.3 已判定废弃） |
+| 取像 | `G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py`（PrintWindow + PW_RENDERFULLCONTENT） | `MCFrameCapture`（`Viewport->ReadPixels` 返回纯白，§1.3 已判定废弃） |
 | 对应性 | `tools/reference_map.py`（真实色俯视） | 旧 `render_topdown.py`（高度着色，不含材质）、旧 `campus_map.py`（ASCII，且曾维护第二套分类） |
 | 帧时 | 环形缓冲的时间分布 | `GetDeltaSeconds()` 单次采样 —— 被 `MaxDeltaTime` 夹到 400 ms，日志里 18 个采样值全是 400.0 ms，**不可引用** |
 
@@ -529,7 +529,7 @@ lime_wool + green_wool = 18,199 块全部落进近白的 `fabric` 族
 ### 8.12 阻断性 bug：组件 override 覆盖资产槽位（引擎源码定论）
 
 `FStaticMeshComponentHelper::GetMaterial()`
-（`Q:/UE/UE_5.8/Engine/Source/Runtime/Engine/Public/StaticMeshComponentHelper.h:133-164`，
+（`G:/BaiduNetdiskDownload/real/UE/UE_5.8/Engine/Source/Runtime/Engine/Public/StaticMeshComponentHelper.h:133-164`，
 `UStaticMeshComponent::GetMaterial` 转调它）：
 
 ```cpp
@@ -737,7 +737,7 @@ while rows < used_rows: rows *= 2            # ← 关键：取到 2 的幂
 但**单位成本换来的辨识度，窗户的杠杆率高于大多数单个颜色变体** —— 一块深色玻璃
 就能让整面白墙读出窗格节奏。所以是**并入第一批**的理由，不是延后的理由。
 
-### 8.15 第一份真实视觉证据（`Q:/MC2UE5/shots/family_materials_*_20261007_*.png`）
+### 8.15 第一份真实视觉证据（`G:/BaiduNetdiskDownload/real/MC2UE5/shots/family_materials_*_20261007_*.png`）
 
 **好消息：贴图平铺已生效。** 近景地面出现**明显的周期性纹理重复** ——
 这正是 block UV（1 方块 = 1 次贴图重复）在工作的直接证据，
@@ -1465,7 +1465,7 @@ ref_map 对照被规划了但从未执行，这就是它一直没暴露的原因
 6. **灯光单源**：`ensure_lighting.py` 与 ApplyLook 对齐（10 lux /
    (-48,-135,0) / realtime sky），重跑时**强制重写**存量灯（不再"left
    alone"保陈旧值）。✅代码级
-7. **诊断路径可移植**：C++ 六处 `Q:/MC2UE5/logs` → `MCTextLogPath()`
+7. **诊断路径可移植**：C++ 六处 `G:/BaiduNetdiskDownload/real/MC2UE5/logs` → `MCTextLogPath()`
    （-MClogdir= > MC_LOG_DIR > ProjectSaved/MCLogs 三级回退）；
    `MCFrameCapture.cpp` 修掉「GetBaseFilename 丢目录」bug（PNG 曾落到
    进程 CWD）。✅人工复核（**未经编译**，见 8.43.3）

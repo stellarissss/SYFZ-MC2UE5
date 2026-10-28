@@ -18,7 +18,7 @@ Run inside the editor.
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/terrain_mat_min.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/terrain_mat_min.txt"
 MAT_DIR = "/Game/MC/Materials"
 MAT_PATH = "/Game/MC/Materials/MC_Terrain"
 _lines = []

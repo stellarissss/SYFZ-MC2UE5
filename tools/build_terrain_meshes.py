@@ -67,7 +67,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACK = os.path.join(REPO, "out/terrain_pack")
 # MC_LOG_DIR overrides where every MC script writes its report; the default
 # keeps the historical location on this host (<repo>/../logs), so existing
-# reading habits and tooling keep working from a checkout at Q:/MC2UE5/repo.
+# reading habits and tooling keep working from a checkout at G:/BaiduNetdiskDownload/real/MC2UE5/repo.
 OUT = os.environ.get("MC_LOG_DIR",
                      os.path.join(os.path.dirname(REPO), "logs",
                                   "build_terrain_meshes.txt"))

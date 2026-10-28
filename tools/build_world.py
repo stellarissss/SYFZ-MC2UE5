@@ -40,12 +40,13 @@ than the process exit code: UnrealEditor-Cmd's exit code is not a reliable
 success signal on this engine (documented in REFACTOR_PLAN §8.6), while every
 script in this repo already writes RESULT to $MC_LOG_DIR.
 
-Usage (Windows, from the repo root, venv python):
+Usage (Windows, from the repo root, venv python -- see tools/mcpaths.py for
+where the venv and engine actually live; nothing here hardcodes a drive):
 
-    Q:\\MC2UE5\\venv\\Scripts\\python.exe tools\\build_world.py
+    python tools\\build_world.py
     python tools/build_world.py --skip-data          # editor steps only
     python tools/build_world.py --only census        # one editor step
-    python tools/build_world.py --engine D:\\UE\\UE_5.8 --python project/Content/Python
+    python tools/build_world.py --engine <path to UnrealEditor-Cmd.exe>
 
 Logs:  MC_LOG_DIR (default <repo>/../logs) -- every step appends to
        logs/build_world_report.json, which is the reproducibility record:
@@ -64,10 +65,22 @@ REPO = os.path.dirname(HERE)
 LOGDIR = os.environ.get("MC_LOG_DIR", os.path.join(os.path.dirname(REPO), "logs"))
 PROJECT = os.path.join(REPO, "project", "MCReplica.uproject")
 PY_DIR = os.path.join(REPO, "project", "Content", "Python")
-EDITOR = r"Q:\UE\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
+# The engine path used to be a literal on the old Q: drive. After the 10-28
+# migration that literal survived as a valid-looking string pointing at a drive
+# that does not exist, so the first symptom would be "editor exited 1" with no
+# other clue. mcpaths derives it from this checkout's own location instead.
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+from mcpaths import EDITOR_CMD, HOME, UE_ROOT  # noqa: E402
+
+EDITOR = EDITOR_CMD
 
 ENV = dict(os.environ)
 ENV["MC_LOG_DIR"] = LOGDIR
+# Propagate the resolved roots so editor-side scripts and child processes agree
+# with this process even when the caller overrode them on the command line.
+ENV["MC2UE5_HOME"] = HOME
+ENV["MC_UE_ROOT"] = UE_ROOT
 
 
 def _say(msg):
@@ -229,7 +242,7 @@ def main():
     _say("  report: %s" % os.path.join(LOGDIR, "build_world_report.json"))
     _say("Next, cook + package (from an elevated/normal cmd, repo root):")
     _say(r"  tools\build_shipping.bat")
-    _say(r"  tools\package_shipping.bat   # -> Q:\MC2UE5\dist_verify")
+    _say(r"  tools\package_shipping.bat   # -> G:\BaiduNetdiskDownload\real\MC2UE5\dist_verify")
     _say("=" * 74)
     return 0
 

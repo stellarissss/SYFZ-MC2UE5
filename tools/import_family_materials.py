@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
+r"""
 import_family_materials.py -- one tiling texture + one material per family, and
 (optionally) rebind every mesh slot to its family's material.
 
@@ -28,12 +28,12 @@ step is the high-risk one and is worth verifying alone:
 
 Run inside the editor:
 
-    Q:\\UE\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe \
-        Q:\\MC2UE5\\repo\\project\\MCReplica.uproject \
-        -ExecutePythonScript=Q:\\MC2UE5\\repo\\tools\\import_family_materials.py \
+    G:\BaiduNetdiskDownload\real\UE\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ^
+        G:\BaiduNetdiskDownload\real\MC2UE5\repo\project\MCReplica.uproject ^
+        -ExecutePythonScript=G:\BaiduNetdiskDownload\real\MC2UE5\repo\tools\import_family_materials.py ^
         --stage=materials -unattended -nopause -nosplash
 
-Log: Q:/MC2UE5/logs/import_family_materials.txt (flushed line by line, ends with
+Log: G:/BaiduNetdiskDownload/real/MC2UE5/logs/import_family_materials.txt (flushed line by line, ends with
 `RESULT: PASS/FAIL` and `--- done ---`).
 
 Four constraints carried over from this project's history -- all load-bearing:
@@ -77,12 +77,12 @@ import traceback
 
 import unreal
 
-REPO = "Q:/MC2UE5/repo"
+REPO = "G:/BaiduNetdiskDownload/real/MC2UE5/repo"
 OUT = os.path.join(REPO, "out")
 FAMILY_DIR = os.path.join(OUT, "families")
 STRUCT_DIR = os.path.join(OUT, "structures")
 TERRAIN_DIR = os.path.join(OUT, "terrain")
-LOG_PATH = "Q:/MC2UE5/logs/import_family_materials.txt"
+LOG_PATH = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/import_family_materials.txt"
 
 FAMILY_CONTENT = "/Game/MC/Families"
 STRUCT_CONTENT = "/Game/MC/Structures"
@@ -1079,9 +1079,9 @@ def run_meshes():
         problems.append("%d actors still carry overrides after reload"
                         % overrides_after)
 
-    shot = "Q:/MC2UE5/shots/family_materials_%s.png" % time.strftime("%Y%m%d_%H%M%S")
+    shot = "G:/BaiduNetdiskDownload/real/MC2UE5/shots/family_materials_%s.png" % time.strftime("%Y%m%d_%H%M%S")
     say("--- capture (run from outside the editor) ---")
-    say("  python Q:/MC2UE5/tools/focus_capture.py --match mcreplica "
+    say("  python G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py --match mcreplica "
         "--out %s" % shot)
 
     return not problems and bool(saved)

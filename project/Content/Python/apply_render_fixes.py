@@ -21,9 +21,9 @@ import traceback
 
 import unreal
 
-sys.path.insert(0, r"Q:/MC2UE5/repo/project/Content/Python")
+sys.path.insert(0, r"G:/BaiduNetdiskDownload/real/MC2UE5/repo/project/Content/Python")
 
-OUT = "Q:/MC2UE5/logs/apply_render_fixes.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/apply_render_fixes.txt"
 L = []
 
 

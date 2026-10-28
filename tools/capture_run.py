@@ -14,7 +14,7 @@ produced a wrong result before:
 2. **The capture path.** `ImageGrab.grab` reads the screen, not the window, so
    it photographs whatever is on top. `UMCFrameCapture`/`ReadPixels` returns
    pure white outside a real frame. The only working path is
-   `Q:/MC2UE5/tools/focus_capture.py` (PrintWindow + PW_RENDERFULLCONTENT),
+   `G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py` (PrintWindow + PW_RENDERFULLCONTENT),
    which is invoked as a subprocess here rather than reimplemented.
 
 3. **A fixed camera.** `-MCstop=N` teleports the pawn to tour stop N after 14 s
@@ -39,8 +39,8 @@ import subprocess
 import sys
 import time
 
-SHOT_TOOL = "Q:/MC2UE5/repo/tools/shot_game.py"
-PY = "Q:/MC2UE5/venv/Scripts/python.exe"
+SHOT_TOOL = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/tools/shot_game.py"
+PY = "G:/BaiduNetdiskDownload/real/venv/Scripts/python.exe"
 PROC = "MCReplica-Win64-Shipping.exe"
 
 
@@ -90,7 +90,7 @@ def main():
                          "(must exceed the 14 s -MCstop kick)")
     ap.add_argument("--gap", type=float, default=4.0,
                     help="seconds between successive captures")
-    ap.add_argument("--outdir", default="Q:/MC2UE5/shots/s6a")
+    ap.add_argument("--outdir", default="G:/BaiduNetdiskDownload/real/MC2UE5/shots/s6a")
     ap.add_argument("--keep-running", action="store_true")
     args = ap.parse_args()
 

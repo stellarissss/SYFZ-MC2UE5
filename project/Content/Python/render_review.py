@@ -26,7 +26,7 @@ import time
 
 import unreal
 
-OUT_DIR = os.environ.get("MC2UE5_SHOT_DIR", r"Q:\MC2UE5\shots")
+OUT_DIR = os.environ.get("MC2UE5_SHOT_DIR", r"G:\BaiduNetdiskDownload\real\MC2UE5\shots")
 
 VIEWS = (
     # (label, yaw_deg, pitch_deg, height_cm)
@@ -120,7 +120,7 @@ def _heightfield():
     data the level was built from, so the render reflects the terrain exactly
     instead of whatever tessellation the mesh happens to carry.
     """
-    root = os.environ.get("MC2UE5_ROOT", r"Q:\MC2UE5\repo")
+    root = os.environ.get("MC2UE5_ROOT", r"G:\BaiduNetdiskDownload\real\MC2UE5\repo")
     lsc = os.path.join(root, "out", "phase2", "overworld", "landscape")
     meta_path = os.path.join(lsc, "landscape.json")
     if not os.path.isfile(meta_path):

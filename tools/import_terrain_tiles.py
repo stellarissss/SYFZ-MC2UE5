@@ -17,8 +17,8 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/import_terrain_tiles.txt"
-TERRAIN_SRC = "Q:/MC2UE5/repo/out/terrain"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/import_terrain_tiles.txt"
+TERRAIN_SRC = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/out/terrain"
 DEST = "/Game/MC/Terrain"
 MAP = "/Game/Maps/MCReplica"
 L = []

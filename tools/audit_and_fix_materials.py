@@ -20,7 +20,7 @@ from collections import Counter
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/audit_materials.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/audit_materials.txt"
 ATLAS = "/Game/MC/Atlas/M_MC_Atlas"
 MAP = "/Game/Maps/MCReplica"
 L = []

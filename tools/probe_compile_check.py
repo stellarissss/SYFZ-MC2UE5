@@ -25,7 +25,7 @@ Run: UnrealEditor-Cmd.exe MCReplica.uproject \
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/probe_compile_check.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/probe_compile_check.txt"
 MAT = "/Game/MC/Materials/MC_Terrain"
 _lines = []
 

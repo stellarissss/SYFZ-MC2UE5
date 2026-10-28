@@ -22,7 +22,7 @@ interrupted run resumes rather than restarting.
 
     set MC2UE5_LFS_TOKEN=<token>          # never passed on the command line
     python3 tools/fetch_lfs_object.py --oid <sha256> --size <bytes> \
-        --name overworld.bin --out Q:/MC2UE5/voxel
+        --name overworld.bin --out G:/BaiduNetdiskDownload/real/MC2UE5/voxel
 
 The assembled file is verified against the sha256 the pointer declares, so a
 truncated transfer is rejected instead of becoming a corrupt archive.

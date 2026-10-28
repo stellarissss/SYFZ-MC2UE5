@@ -14,7 +14,7 @@ DirectX-convention normals, not the OpenGL `nor_gl` set) and **Rough**
 the 4k/8k sets are tens of megabytes each over a slow link for no visible gain
 at this scale.
 
-    python3 tools/fetch_cc0_textures.py --out Q:/MC2UE5/assets_cc0/polyhaven
+    python3 tools/fetch_cc0_textures.py --out G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/polyhaven
 """
 
 import argparse

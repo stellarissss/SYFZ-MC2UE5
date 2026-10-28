@@ -3,7 +3,7 @@
 Author: engineering-lead-3 (程基岩). All numbers below were measured on this
 host during this session unless marked **inferred**.
 
-Engine: UE 5.8.3 (CL 58210709). Python: `Q:/MC2UE5/venv/Scripts/python.exe`.
+Engine: UE 5.8.3 (CL 58210709). Python: `G:/BaiduNetdiskDownload/real/venv/Scripts/python.exe`.
 
 ---
 
@@ -52,11 +52,11 @@ pipeline renders at all** — every earlier fogged capture was blind to this.
 | Frame texture statistics | `repo/tools/frame_stats.py` |
 | Launch + park + capture harness | `repo/tools/capture_run.py` |
 | Game-window selector (not editor) | `repo/tools/shot_game.py` |
-| Package #1 (assets as of 12:28) | `Q:/MC2UE5/dist_verify` |
-| Package #2 (assets as of 12:38 rebind) | `Q:/MC2UE5/dist_verify2` |
-| Screenshots | `Q:/MC2UE5/shots/s6a/*.png` |
-| Cook logs | `Q:/MC2UE5/logs/s6a/cook1*.log`, `cook2*.log` |
-| Pak listings | `Q:/MC2UE5/logs/s6a/pak_lists*/` |
+| Package #1 (assets as of 12:28) | `G:/BaiduNetdiskDownload/real/MC2UE5/dist_verify` |
+| Package #2 (assets as of 12:38 rebind) | `G:/BaiduNetdiskDownload/real/MC2UE5/dist_verify2` |
+| Screenshots | `G:/BaiduNetdiskDownload/real/MC2UE5/shots/s6a/*.png` |
+| Cook logs | `G:/BaiduNetdiskDownload/real/MC2UE5/logs/s6a/cook1*.log`, `cook2*.log` |
+| Pak listings | `G:/BaiduNetdiskDownload/real/MC2UE5/logs/s6a/pak_lists*/` |
 
 ---
 
@@ -641,12 +641,12 @@ range?) — that number settles it.
 
 Two trees, overlapping partially:
 
-- **`Q:/MC2UE5/tools/`** — 17 files, **none version-controlled** (verified:
+- **`G:/BaiduNetdiskDownload/real/MC2UE5/tools/`** — 17 files, **none version-controlled** (verified:
   `git ls-files | grep focus` returns nothing). Holds `focus_capture.py`,
   `shot.py`, `seq_capture.py`, `capture_game.py`, `verify_shipping.py`,
   `render_topdown.py`, `make_release.py`, `reg_sdk.py`, plus agent-written
   census/probe helpers.
-- **`Q:/MC2UE5/repo/tools/`** — 34 tracked files, the pipeline
+- **`G:/BaiduNetdiskDownload/real/MC2UE5/repo/tools/`** — 34 tracked files, the pipeline
   (`classify.py`, `extract_structures.py`, `build_atlas.py`,
   `import_family_materials.py`, …). Also the documented home of `reg_sdk.py`
   (identical to the top-level copy).
@@ -660,7 +660,7 @@ working screenshot path this project has (documented in REFACTOR_PLAN.md and
 qa_s5_report.md), and it is **outside version control**. A rebuild of the
 checkout loses it, and every visual claim in this project depends on it. I did
 **not** move anything (per the brief); I added my own capture tooling under
-`repo/tools/` and pointed it at `Q:/MC2UE5/tools/focus_capture.py` by absolute
+`repo/tools/` and pointed it at `G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py` by absolute
 path so nothing is duplicated.
 
 ---

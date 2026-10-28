@@ -32,8 +32,8 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/probe_obj_import_compare.txt"
-REPO = "Q:/MC2UE5/repo"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/probe_obj_import_compare.txt"
+REPO = "G:/BaiduNetdiskDownload/real/MC2UE5/repo"
 TEST_DIR = "/Game/MC/_Test"
 L = []
 

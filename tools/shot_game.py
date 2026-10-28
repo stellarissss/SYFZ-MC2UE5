@@ -15,7 +15,7 @@ This wrapper does not reimplement the capture. It reuses focus_capture's
 `capture()` (PrintWindow + PW_RENDERFULLCONTENT) and only changes window
 *selection*: exact title, with editor/crash-report titles rejected outright.
 
-    python shot_game.py --out Q:/MC2UE5/shots/s6a/foo.png
+    python shot_game.py --out G:/BaiduNetdiskDownload/real/MC2UE5/shots/s6a/foo.png
 """
 
 import argparse
@@ -23,7 +23,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "Q:/MC2UE5/tools")
+sys.path.insert(0, "G:/BaiduNetdiskDownload/real/MC2UE5/tools")
 
 import focus_capture as fc           # noqa: E402
 

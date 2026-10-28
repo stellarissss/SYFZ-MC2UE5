@@ -286,7 +286,7 @@ max Δ40 / 474 px >8，噪声底是 max Δ31 / 479 px >8 —— **两者不可�
 
 **② "Shipping 静默失败 = 删每目标中间件" —— 这条经验是错的，我传错了。**
 QA 删了该目录**没有解决**。真实原因是 **UBA**：`link.exe` 在 UBA executor 下
-退出 1，而**同一条命令单独执行退出 0**；`Q:/UBA` 对当前用户 ACL 上锁。
+退出 1，而**同一条命令单独执行退出 0**；`G:/BaiduNetdiskDownload/real/UBA` 对当前用户 ACL 上锁。
 加 `-NoUBA` 后 link 通过，失败点移到 `WriteMetadata`，它单独执行同样退出 0。
 **每一步都只在 UBA 下失败。**
 
@@ -317,5 +317,5 @@ QA 给出决定性论据：**greystone 自身的内部对比度（标准差 11.6
 1. 重跑 `import_chunks.py`，**保存关卡**（当前引用 0 个结构），
    验证 `grep -c bld_ MCReplica.umap` > 0；
 2. 重新 cook / stage —— 图集只有在关卡引用它时才会进 pak；
-3. 修复或绕开 **UBA**（`Q:/UBA` 对本用户 ACL 上锁）——
+3. 修复或绕开 **UBA**（`G:/BaiduNetdiskDownload/real/UBA` 对本用户 ACL 上锁）——
    **这会阻塞本机所有 Shipping 构建。**

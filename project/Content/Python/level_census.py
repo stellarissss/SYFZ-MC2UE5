@@ -16,10 +16,24 @@ Run inside the editor.
 """
 
 import collections
+import os
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/level_census.txt"
+# build_world.py exports MC_LOG_DIR; when this file is run on its own (which is
+# how every diagnostic in docs/ was produced) fall back to <repo>/../logs
+# derived from this file's location. The old literal "G:/BaiduNetdiskDownload/real/MC2UE5/logs" survived
+# the 10-28 drive migration as a path to a drive that no longer exists, and the
+# only symptom was a silent failure to write the census.
+_LOG_DIR = os.environ.get("MC_LOG_DIR")
+if not _LOG_DIR:
+    _here = os.path.dirname(os.path.abspath(__file__))          # project/Content/Python
+    # Python -> Content -> project -> repo -> MC2UE5   (four levels up)
+    _mc2ue5 = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(_here))))
+    _LOG_DIR = os.path.join(_mc2ue5, "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+OUT = os.path.join(_LOG_DIR, "level_census.txt")
 _lines = []
 
 

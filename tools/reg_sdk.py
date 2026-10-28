@@ -28,8 +28,8 @@ import sys
 
 import winreg
 
-SDK_ROOT = r"Q:\WindowsKits\\"
-NETFX_ROOT = r"Q:\WindowsKits\NETFXSDK\4.6.2"
+SDK_ROOT = r"G:\BaiduNetdiskDownload\real\WindowsKits\\"
+NETFX_ROOT = r"G:\BaiduNetdiskDownload\real\WindowsKits\NETFXSDK\4.6.2"
 
 #: (hive, subkey, value name, data, type)
 ENTRIES = (

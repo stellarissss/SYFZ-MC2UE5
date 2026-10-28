@@ -24,7 +24,7 @@ import unreal
 
 # A marker file the launcher polls so it can tell when the script finished and
 # whether the save actually persisted, independent of log flushing.
-RESULT_PATH = "Q:/MC2UE5/repo/cpuaccess_result.txt"
+RESULT_PATH = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/cpuaccess_result.txt"
 
 
 def _write_result(status, detail):

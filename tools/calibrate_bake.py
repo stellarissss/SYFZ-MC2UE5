@@ -144,8 +144,8 @@ def source_for(fam, ambientcg_root, assets_root, acg):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ambientcg", default="Q:/MC2UE5/assets_cc0/ambientcg")
-    ap.add_argument("--assets", default="Q:/MC2UE5/assets_cc0/polyhaven")
+    ap.add_argument("--ambientcg", default="G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/ambientcg")
+    ap.add_argument("--assets", default="G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/polyhaven")
     ap.add_argument("--emit", action="store_true",
                     help="print a paste-ready BAKE_GAINS block")
     ap.add_argument("--out", default=os.path.join(REPO, "out", "atlas",

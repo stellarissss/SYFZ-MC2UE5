@@ -256,8 +256,8 @@ UnrealEditor.exe project/MCReplica.uproject \
 # 4. Package. The toolchain lives on Q:, and the Windows SDK registry entry is
 #    lost whenever the system drive resets, so the SDK root is re-registered
 #    (tools/reg_sdk.py) and UBT is pointed at it first:
-#      UE_SDKS_ROOT=Q:\AutoSDK  WindowsSDKDir=Q:\WindowsKits
-#      WindowsSDKVersion=10.0.26100.0  DOTNET_ROOT=Q:\dotnet  UBA_ROOT=Q:\UBA
+#      UE_SDKS_ROOT=G:\BaiduNetdiskDownload\real\AutoSDK  WindowsSDKDir=G:\BaiduNetdiskDownload\real\WindowsKits
+#      WindowsSDKVersion=10.0.26100.0  DOTNET_ROOT=G:\BaiduNetdiskDownload\real\dotnet  UBA_ROOT=G:\BaiduNetdiskDownload\real\UBA
 #    Cook to loose files with -SkipZenStore; without it the cooked packages go
 #    into the Zen store and the staging step cannot read them back.
 Engine/Binaries/Win64/UnrealEditor-Cmd.exe <checkout>/project/MCReplica.uproject \

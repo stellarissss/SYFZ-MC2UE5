@@ -27,13 +27,13 @@ import unreal
 
 DEST_DIR = "/Game/MC/Terrain"
 TILES = [
-    ("00_00", "Q:/MC2UE5/terrain/overworld_00_00_collision.obj"),
-    ("00_01", "Q:/MC2UE5/terrain/overworld_00_01_collision.obj"),
-    ("01_00", "Q:/MC2UE5/terrain/overworld_01_00_collision.obj"),
-    ("01_01", "Q:/MC2UE5/terrain/overworld_01_01_collision.obj"),
+    ("00_00", "G:/BaiduNetdiskDownload/real/MC2UE5/terrain/overworld_00_00_collision.obj"),
+    ("00_01", "G:/BaiduNetdiskDownload/real/MC2UE5/terrain/overworld_00_01_collision.obj"),
+    ("01_00", "G:/BaiduNetdiskDownload/real/MC2UE5/terrain/overworld_01_00_collision.obj"),
+    ("01_01", "G:/BaiduNetdiskDownload/real/MC2UE5/terrain/overworld_01_01_collision.obj"),
 ]
 
-REPORT_PATH = "Q:/MC2UE5/logs/refix_collision.txt"
+REPORT_PATH = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/refix_collision.txt"
 _lines = []
 
 

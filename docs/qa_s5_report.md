@@ -1,6 +1,6 @@
 # QA-S5 report — frame-level A/B and Shipping cook
 
-**Author:** 严守真 (quality-lead) · **Date:** 2026-10-06 · **Project:** `Q:/MC2UE5/repo`
+**Author:** 严守真 (quality-lead) · **Date:** 2026-10-06 · **Project:** `G:/BaiduNetdiskDownload/real/MC2UE5/repo`
 **Verdict: FAIL — not verified.** The bake numbers are real and reproduce exactly. The claim
 *"the baked atlas reaches the screen"* is **NOT VERIFIED**, and it is not verifiable with the
 current build: the atlas is not in the packaged build at all, so the A/B cannot exercise it.
@@ -26,12 +26,12 @@ I did not fix anything. The atlas PNG in the UE tree was restored byte-identical
 ### 1a. Two path corrections (the brief's paths do not exist)
 
 - `dist/Windows/MCReplica.exe` does not exist under `repo/`. Packaged builds live at
-  `Q:/MC2UE5/dist*/Windows/`, and there are **46** of them (`dist` … `dist52`). I used
+  `G:/BaiduNetdiskDownload/real/MC2UE5/dist*/Windows/`, and there are **46** of them (`dist` … `dist52`). I used
   **`dist52`**, the newest by mtime.
 - `tools/focus_capture.py` does not exist under `repo/tools/`. The real one is
-  **`Q:/MC2UE5/tools/focus_capture.py`**. There are two separate `tools/` trees; the atlas
+  **`G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py`**. There are two separate `tools/` trees; the atlas
   tooling (`build_atlas.py`, `verify_atlas.py`, `pick_spawn.py`) is in `repo/tools/`, the
-  capture/verify tooling is in `Q:/MC2UE5/tools/`.
+  capture/verify tooling is in `G:/BaiduNetdiskDownload/real/MC2UE5/tools/`.
 
 ### 1b. The captures ran, and they are real frames
 
@@ -133,7 +133,7 @@ noise floor**, never a hash inequality.
 ### 2a. Builds — both succeed
 
 With the specified env (`UE_SDKS_ROOT`, `WindowsSDKDir=10.0.26100.0`, `DOTNET_ROOT`, `UBA_ROOT`,
-`/q/dotnet` on PATH):
+`/g/BaiduNetdiskDownload/real/dotnet` on PATH):
 
 ```
 MCReplicaEditor Win64 Development  →  Result: Succeeded
@@ -157,7 +157,7 @@ Running the *identical* command by hand, outside UBA, succeeds:
 link.exe @"…/MCReplica-Win64-Shipping.exe.rsp"   → exit 0, .lib and .exp written
 ```
 
-This machine cannot write to `Q:/UBA` (ACL-locked — the same class of fault as the
+This machine cannot write to `G:/BaiduNetdiskDownload/real/UBA` (ACL-locked — the same class of fault as the
 `UbaStorageServer … Access is denied` lines in every log). With `-NoUBA` the link passes and the
 failure simply **moves one step later** to `WriteMetadata … -Mode=WriteMetadata`, which *also*
 succeeds standalone. Each step fails only under the UBA executor.
@@ -293,7 +293,7 @@ Nothing in the test harness — the build is missing the content. In order:
    `tools/import_chunks.py`, **save the level**, and confirm `grep -c bld_ … MCReplica.umap` > 0.
 2. **Re-cook and re-stage.** Atlas and Structures are absent from `ReferencedSet.txt`; they can
    only enter the pak if the level references them.
-3. **Fix or bypass UBA.** `Q:/UBA` is ACL-locked for this user; every UBA-hosted step fails
+3. **Fix or bypass UBA.** `G:/BaiduNetdiskDownload/real/UBA` is ACL-locked for this user; every UBA-hosted step fails
    silently with exit code 1 while succeeding standalone. `-NoUBA` moves the failure rather
    than removing it. This blocks any Shipping build on this machine.
 4. **Then** re-run the A/B — but compare per-pixel against a same-input noise floor, not hashes
@@ -311,8 +311,8 @@ saved with its structures (1), atlas/structures not cooked (2), UBA unwritable (
 
 ### Files
 
-- Frames: `Q:/MC2UE5/shots/frame_{A_dist52_baseline,A2_baked,B_prebake}.png`, `det{1,2}.png`
-- Diff map: `Q:/MC2UE5/shots/diffmap_A2_vs_B.png`
-- Restored atlas backup: `Q:/MC2UE5/shots/atlas_diffuse.BAKED.png`
+- Frames: `G:/BaiduNetdiskDownload/real/MC2UE5/shots/frame_{A_dist52_baseline,A2_baked,B_prebake}.png`, `det{1,2}.png`
+- Diff map: `G:/BaiduNetdiskDownload/real/MC2UE5/shots/diffmap_A2_vs_B.png`
+- Restored atlas backup: `G:/BaiduNetdiskDownload/real/MC2UE5/shots/atlas_diffuse.BAKED.png`
 - Build/cook logs: `/tmp/build_editor.log`, `/tmp/build_shipping.log`, `/tmp/cook{,2,3}.log`
-- Helper scripts written for this test: `Q:/MC2UE5/shots/{cap.sh,cap2.sh,build_editor.bat,build_shipping.bat,cook{,2,3}.bat}`
+- Helper scripts written for this test: `G:/BaiduNetdiskDownload/real/MC2UE5/shots/{cap.sh,cap2.sh,build_editor.bat,build_shipping.bat,cook{,2,3}.bat}`

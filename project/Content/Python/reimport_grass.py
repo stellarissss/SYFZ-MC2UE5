@@ -2,9 +2,9 @@
 """Re-import the grass texture with its missed biome tint applied."""
 import unreal
 
-SRC = "Q:/MC2UE5/textures_tinted/grass_block_top.png"
+SRC = "G:/BaiduNetdiskDownload/real/MC2UE5/textures_tinted/grass_block_top.png"
 DEST_DIR = "/Game/MC/Textures"
-OUT = "Q:/MC2UE5/logs/reimport_grass.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/reimport_grass.txt"
 
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 task = unreal.AssetImportTask()

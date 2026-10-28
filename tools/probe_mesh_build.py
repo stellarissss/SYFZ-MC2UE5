@@ -30,7 +30,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/probe_mesh_api.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/probe_mesh_api.txt"
 TEST_DIR = "/Game/MC/_Test"
 L = []
 

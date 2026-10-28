@@ -10,7 +10,7 @@ having actually flipped the voxel layer and nothing else.
 
 This launches the game N times with the SAME single-token argument, and reads the
 layer spec the game itself wrote for each run (the game appends a `parse ... spec=`
-line to Q:/MC2UE5/logs/mclayers.txt at BeginPlay, and an `apply ... -> census`
+line to G:/BaiduNetdiskDownload/real/MC2UE5/logs/mclayers.txt at BeginPlay, and an `apply ... -> census`
 line 6s later). The file is emptied before each run so each run's line is
 unambiguous -- size-offset reading failed earlier because the file was truncated
 underneath it.
@@ -29,10 +29,10 @@ import subprocess
 import sys
 import time
 
-GAME_EXE = "Q:/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
-PROJECT = "Q:/MC2UE5/repo/project/MCReplica.uproject"
-SHOTS = "Q:/MC2UE5/shots"
-LAYER_LOG = "Q:/MC2UE5/logs/mclayers.txt"
+GAME_EXE = "G:/BaiduNetdiskDownload/real/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
+PROJECT = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/project/MCReplica.uproject"
+SHOTS = "G:/BaiduNetdiskDownload/real/MC2UE5/shots"
+LAYER_LOG = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/mclayers.txt"
 
 
 def kill_game():
@@ -57,14 +57,14 @@ def run_once(tag, extra, stop, wait, shot):
     open(LAYER_LOG, "w").close()
     cmd = [GAME_EXE, PROJECT, "-game", "-windowed", "-ResX=1280", "-ResY=720",
            "-nosplash"] + extra + ["-MCstop=%d" % stop, "-log"]
-    log = "Q:/MC2UE5/logs/mclayers_repro_%s.log" % tag
+    log = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/mclayers_repro_%s.log" % tag
     with open(log, "wb") as fh:
         subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT)
     print("  [%s] %s  -> waiting %ds" % (tag, " ".join(extra) or "(no args)",
                                          wait))
     time.sleep(wait)
     if shot:
-        subprocess.run([sys.executable, "Q:/MC2UE5/tools/focus_capture.py",
+        subprocess.run([sys.executable, "G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py",
                         "--match", "mcreplica", "--out", shot],
                        capture_output=True, text=True)
     kill_game()
@@ -90,6 +90,9 @@ def main():
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--stop", type=int, default=3)
     ap.add_argument("--wait", type=int, default=115)
+    ap.add_argument("--toggle", default="-vox",
+                    help="value for -MClayers= (default a single token; "
+                         "pass e.g. '-vox,-struct' to test the multi-token form)")
     args = ap.parse_args()
 
     os.makedirs(SHOTS, exist_ok=True)
@@ -101,13 +104,16 @@ def main():
     spec = run_once("default", [], args.stop, args.wait, shots["default"])
     rows.append(("default", "(none)", spec, shots["default"]))
 
-    # The toggle under test: one token, repeated.
+    # The toggle under test, repeated identically. The argument string is a
+    # parameter so the same harness can test a single token and a multi-token
+    # form without editing code -- the multi-token form is what the parser bug
+    # is about.
     for i in range(args.reps):
-        tag = "vox_off_%d" % i
+        tag = "toggle_%d" % i
+        extra = ["-MClayers=" + args.toggle] if args.toggle else []
         shots[tag] = os.path.join(SHOTS, "%s_repro_%s.png" % (stamp, tag))
-        spec = run_once(tag, ["-MClayers=-vox"], args.stop, args.wait,
-                        shots[tag])
-        rows.append((tag, "-MClayers=-vox", spec, shots[tag]))
+        spec = run_once(tag, extra, args.stop, args.wait, shots[tag])
+        rows.append((tag, " ".join(extra) or "(none)", spec, shots[tag]))
 
     print()
     print("=== layer spec the game wrote, per run ===")
@@ -118,22 +124,25 @@ def main():
             if line.startswith("parse "):
                 spec_one = line.split("spec=", 1)[1].split(" t=")[0].strip()
         seen.add((arg, spec_one))
-        print("  %-14s %-18s parse spec = %s" % (tag, arg, spec_one or "(none)"))
+        print("  %-14s %-24s parse spec = %s" % (tag, arg, spec_one or "(none)"))
         for line in spec.splitlines():
             if line.startswith("apply "):
                 print("        %s" % line)
 
-    vox_runs = {s for a, s in seen if a == "-MClayers=-vox"}
-    print()
-    if len(vox_runs) > 1:
-        print("  ==> `-MClayers=-vox` parsed to %d DIFFERENT specs across "
-              "%d identical runs." % (len(vox_runs), args.reps))
-        print("      The switch is non-deterministic even for a single token;")
-        print("      any A/B built on it is invalid until the parser is fixed.")
+    want_arg = "-MClayers=" + args.toggle if args.toggle else "(none)"
+    vox_runs = [s for a, s in seen if a == want_arg]
+    n_vox = len(vox_runs)
+    if n_vox > 1:
+        print("  ==> `%s` parsed to %d DIFFERENT specs across %d identical "
+              "runs." % (want_arg, n_vox, args.reps))
+        print("      The switch is non-deterministic; any A/B built on it is")
+        print("      invalid until the parser is fixed.")
+    elif n_vox == 1:
+        print("  ==> `%s` parsed to the same spec every run (%s)."
+              % (want_arg, vox_runs[0] or "n/a"))
+        print("      A toggle looks deterministic here.")
     else:
-        print("  ==> `-MClayers=-vox` parsed to the same spec every run "
-              "(%s)." % (vox_runs.pop() if vox_runs else "n/a"))
-        print("      A single-token toggle looks deterministic here.")
+        print("  ==> no parse line captured for `%s`; cannot judge." % want_arg)
 
     print()
     print("=== per-shot measurement ===")

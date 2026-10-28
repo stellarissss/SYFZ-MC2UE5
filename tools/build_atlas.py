@@ -496,12 +496,12 @@ def _verify_saved(png, layout, tol=TOLERANCE):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--assets",
-                    default="Q:/MC2UE5/assets_cc0/polyhaven",
+                    default="G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/polyhaven",
                     help="CC0 source textures. This path is OUTSIDE the repo; "
                          "the in-repo assets_cc0/polyhaven is an empty stub. "
                          "Recorded in the manifest so S5 is reproducible.")
     ap.add_argument("--ambientcg",
-                    default="Q:/MC2UE5/assets_cc0/ambientcg",
+                    default="G:/BaiduNetdiskDownload/real/MC2UE5/assets_cc0/ambientcg",
                     help="where fetch_ambientcg.py put the re-sourced CC0 "
                          "colour maps. A family in RESOURCE that is missing "
                          "here is a hard error, not a fallback to Poly Haven: "

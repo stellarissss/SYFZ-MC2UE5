@@ -3,7 +3,7 @@
 make_release.py -- pack the staged build into a release archive.
 
 Deliberately uses Python's ``tarfile`` rather than shelling out to ``tar``:
-Git Bash on Windows rewrites ``Q:/...`` into a path its own ``tar`` then
+Git Bash on Windows rewrites ``G:/BaiduNetdiskDownload/real/...`` into a path its own ``tar`` then
 mis-parses ("Cannot write: Broken pipe"), and the archive has to be byte-exact
 regardless of which shell is driving the build.
 

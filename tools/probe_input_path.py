@@ -31,7 +31,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/probe_input_path.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/probe_input_path.txt"
 L = []
 
 

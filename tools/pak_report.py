@@ -16,8 +16,8 @@ This tool runs that for every container in a dist directory and prints, per
 container, how many entries match a set of path prefixes, plus the total entry
 count so a "0" can be distinguished from "the listing failed".
 
-    python pak_report.py Q:/MC2UE5/dist_verify
-    python pak_report.py Q:/MC2UE5/dist_verify --json out/pak_report.json
+    python pak_report.py G:/BaiduNetdiskDownload/real/MC2UE5/dist_verify
+    python pak_report.py G:/BaiduNetdiskDownload/real/MC2UE5/dist_verify --json out/pak_report.json
 """
 
 import argparse
@@ -27,7 +27,7 @@ import os
 import subprocess
 import sys
 
-UNREALPAK = "Q:/UE/UE_5.8/Engine/Binaries/Win64/UnrealPak.exe"
+UNREALPAK = "G:/BaiduNetdiskDownload/real/UE/UE_5.8/Engine/Binaries/Win64/UnrealPak.exe"
 
 #: Prefixes that must be present for the level to render the S3/S4/S5 output.
 REQUIRED = [

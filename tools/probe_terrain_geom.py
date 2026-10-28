@@ -19,8 +19,8 @@ import os
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/probe_terrain_geom.txt"
-TERRAIN = "Q:/MC2UE5/repo/out/terrain"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/probe_terrain_geom.txt"
+TERRAIN = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/out/terrain"
 L = []
 
 
@@ -58,7 +58,7 @@ def main():
         ("terrain_-016_-032", "/Game/MC/Terrain/terrain_-016_-032",
          os.path.join(TERRAIN, "terrain_-016_-032.obj")),
         ("bld_001_structure", "/Game/MC/Structures/bld_001_structure",
-         "Q:/MC2UE5/repo/out/structures/bld_001_structure.obj"),
+         "G:/BaiduNetdiskDownload/real/MC2UE5/repo/out/structures/bld_001_structure.obj"),
     ]
 
     for name, path, obj in probes:

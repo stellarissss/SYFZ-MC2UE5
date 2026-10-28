@@ -19,11 +19,11 @@ import os
 
 import unreal
 
-SRC_DIR = "Q:/MC2UE5/character"
-TMP_DIR = "Q:/MC2UE5/character_flipped"
+SRC_DIR = "G:/BaiduNetdiskDownload/real/MC2UE5/character"
+TMP_DIR = "G:/BaiduNetdiskDownload/real/MC2UE5/character_flipped"
 DEST_DIR = "/Game/MC/Character"
 PARTS = ("char_head", "char_torso", "char_arm", "char_leg")
-REPORT = "Q:/MC2UE5/logs/flip_char.txt"
+REPORT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/flip_char.txt"
 _lines = []
 
 

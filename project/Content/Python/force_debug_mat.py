@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Put a flat magenta material on every block cluster -- the 1-bit experiment."""
 import unreal
-OUT="Q:/MC2UE5/logs/force_debug_mat.txt"; L=[]
+OUT="G:/BaiduNetdiskDownload/real/MC2UE5/logs/force_debug_mat.txt"; L=[]
 def say(s):
     L.append(str(s)); open(OUT,"w").write("\n".join(L)+"\n")
 m=unreal.load_asset("/Game/MC/CC0/MC_Debug")

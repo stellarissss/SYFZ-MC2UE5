@@ -19,7 +19,7 @@ import traceback
 
 import unreal
 
-OUT = "Q:/MC2UE5/logs/fix_atlas_binding.txt"
+OUT = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/fix_atlas_binding.txt"
 MAT = "/Game/MC/Atlas/M_MC_Atlas"
 TEX = "/Game/MC/Atlas/T_MC_Atlas"
 L = []

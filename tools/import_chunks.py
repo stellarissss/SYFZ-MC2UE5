@@ -45,11 +45,11 @@ import sys
 
 import unreal
 
-REPO = "Q:/MC2UE5/repo"
+REPO = "G:/BaiduNetdiskDownload/real/MC2UE5/repo"
 OUT = os.path.join(REPO, "out")
 ATLAS_DIR = os.path.join(OUT, "atlas")
 STRUCT_DIR = os.path.join(OUT, "structures")
-LOG_PATH = "Q:/MC2UE5/logs/import_chunks.txt"
+LOG_PATH = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/import_chunks.txt"
 
 ATLAS_CONTENT = "/Game/MC/Atlas"
 MESH_CONTENT = "/Game/MC/Structures"

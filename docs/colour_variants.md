@@ -404,7 +404,7 @@ im = im.point([min(255, int(v * r)) for v in range(256)] +
 
 ## 5. 我实测了什么（口径说明）
 
-用 `Q:\MC2UE5\venv\Scripts\python.exe`（numpy 2.5.3 / PIL 12.3.0）。
+用 `G:\BaiduNetdiskDownload\real\venv\Scripts\python.exe`（numpy 2.5.3 / PIL 12.3.0）。
 
 **我自己实测的：**
 - `out/families/*.png` 全部 22 张的均值与纹理标准差（fabric (178.0,180.1,184.0) std 1.9；

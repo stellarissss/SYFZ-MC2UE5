@@ -21,10 +21,10 @@ runtime visibility switch (MCLayerControl.cpp), not a destructive edit.
 
 Run with the project venv (it needs PIL), NOT inside the editor:
 
-    Q:/MC2UE5/venv/Scripts/python.exe tools/capture_stops.py
+    G:/BaiduNetdiskDownload/real/venv/Scripts/python.exe tools/capture_stops.py
     ... --stops 0,1,2 --wait 130 --layers=-vox
 
-Output: Q:/MC2UE5/shots/<stamp>_stop<idx>_<name>.png + a printed measurement
+Output: G:/BaiduNetdiskDownload/real/MC2UE5/shots/<stamp>_stop<idx>_<name>.png + a printed measurement
 table, and the same table written next to the shots.
 """
 
@@ -34,13 +34,13 @@ import subprocess
 import sys
 import time
 
-EDITOR = "Q:/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
+EDITOR = "G:/BaiduNetdiskDownload/real/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 # The game build is the editor in -game mode: the packaged builds on disk are
 # older than the current assets, so they would show the wrong world.
-GAME_EXE = "Q:/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
-PROJECT = "Q:/MC2UE5/repo/project/MCReplica.uproject"
-FOCUS = "Q:/MC2UE5/tools/focus_capture.py"
-SHOTS = "Q:/MC2UE5/shots"
+GAME_EXE = "G:/BaiduNetdiskDownload/real/UE/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe"
+PROJECT = "G:/BaiduNetdiskDownload/real/MC2UE5/repo/project/MCReplica.uproject"
+FOCUS = "G:/BaiduNetdiskDownload/real/MC2UE5/tools/focus_capture.py"
+SHOTS = "G:/BaiduNetdiskDownload/real/MC2UE5/shots"
 
 # (index, name) -- index is what -MCstop= takes. Mirrors GTourStops.
 STOPS = [
@@ -68,7 +68,7 @@ def shoot(stop_idx, name, wait, layers, res):
     if layers:
         cmd.append("-MClayers=%s" % layers)
     cmd += ["-MCstop=%d" % stop_idx, "-log"]
-    log = "Q:/MC2UE5/logs/capture_stop%d.log" % stop_idx
+    log = "G:/BaiduNetdiskDownload/real/MC2UE5/logs/capture_stop%d.log" % stop_idx
     with open(log, "wb") as fh:
         subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT)
     print("  stop %d (%s): launched, waiting %ds" % (stop_idx, name, wait))
