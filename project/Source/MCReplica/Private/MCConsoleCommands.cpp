@@ -807,7 +807,7 @@ void AMCFrameCaptureGameMode::MCBlockCollision(float Enable)
 namespace
 {
         /**
-         * Camera stops for MCTour, in world cm.
+         * Camera stops for MCTour, in world cm, in the level's actual basis.
          *
          * Chosen from the landmark survey (tools/survey_landmarks.py) and the
          * top-down map (tools/campus_map.py), so each stop is aimed at something the
@@ -819,9 +819,17 @@ namespace
          *   west       the building band along the campus's west edge
          *   approach   the field's northern edge, looking across it
          *
-         * Yaw is Unreal's: 0 looks down +X, 90 down +Y. Minecraft's +z maps to Unreal
-         * +Y, so a player looking "north" in the save (decreasing z) looks down -Y,
-         * i.e. yaw -90.
+         * Yaw is Unreal's: 0 looks down +X, 90 down +Y. Basis note: the world
+         * that actually renders (terrain + structures, via the OBJ importer
+         * and the terrain pack) maps MC z to **-**Y, so "north" in the save
+         * (decreasing mc z) is increasing UE Y, i.e. yaw +90.
+         *
+         * The stop table below was originally authored as Y = +mc z * 100
+         * (the mirrored half -- the same class of error the PlayerStart had,
+         * see REFACTOR_PLAN §8.43.1). Y here is the negated, correct-side
+         * value, and yaw is mirrored with it: a reflection across the X axis
+         * maps direction (dx, dz) to (dx, -dz), i.e. yaw -> -yaw, so 180
+         * stays 180, 225 becomes 135, and -90 becomes 90.
          */
         struct FMCTourStop
         {
@@ -833,11 +841,11 @@ namespace
         };
 
         const FMCTourStop GTourStops[] = {
-                { TEXT("01_sports_field"), 15000.0, -21200.0, 180.0,  -5.0 },
-                { TEXT("02_buildings"),     4000.0, -30000.0, 180.0,  -2.0 },
-                { TEXT("03_tall_block"),    7500.0, -50000.0, 180.0,   6.0 },
-                { TEXT("04_west_band"),    11500.0, -30000.0, 225.0,  -2.0 },
-                { TEXT("05_field_axis"),    9600.0, -34000.0, -90.0,  -4.0 },
+                { TEXT("01_sports_field"), 15000.0,  21200.0, 180.0,  -5.0 },
+                { TEXT("02_buildings"),     4000.0,  30000.0, 180.0,  -2.0 },
+                { TEXT("03_tall_block"),    7500.0,  50000.0, 180.0,   6.0 },
+                { TEXT("04_west_band"),    11500.0,  30000.0, 135.0,  -2.0 },
+                { TEXT("05_field_axis"),    9600.0,  34000.0,  90.0,  -4.0 },
         };
 
         /** Index of the stop being captured, and the timer that advances it. */
