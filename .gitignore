@@ -40,13 +40,18 @@ project/Content/**/__pycache__/
 out/*
 !out/phase2/
 !out/survey/
-logs/             # MC_LOG_DIR 侧的报告（build_world/各编辑器脚本的产物）
+# MC_LOG_DIR 侧的报告（build_world/各编辑器脚本的产物）
+logs/
 
 # ---- 生成内容（可由 tools 重建）------------------------------------------
-project/Content/MC/            # 地形网格 / 碰撞代理 / 材质 / 纹理 / 道具
-project/Content/Maps/          # MCReplica.umap + World Partition HLOD 层
-project/Content/__ExternalActors__/   # World Partition 的外部 actor
-tools_out/                     # build_terrain_mesh.py 的 OBJ 输出目录
+# 地形网格 / 碰撞代理 / 材质 / 纹理 / 道具
+project/Content/MC/
+# MCReplica.umap + World Partition HLOD 层
+project/Content/Maps/
+# World Partition 的外部 actor
+project/Content/__ExternalActors__/
+# build_terrain_mesh.py 的 OBJ 输出目录
+tools_out/
 
 
 # ---- 凭据 —— 绝不提交 --------------------------------------------------
@@ -78,8 +83,10 @@ venv/
 .mypy_cache/
 .pytest_cache/
 # ---- 生成的构建中间产物 --------------------------------------------------
-terrain/          # build_terrain_mesh.py 的 OBJ 输出
-character/        # make_character.py 生成的网格与皮肤
+# build_terrain_mesh.py 的 OBJ 输出
+terrain/
+# make_character.py 生成的网格与皮肤
+character/
 shots/            # 评测渲染图
 dist/ dist2/ dist3/
 *.tar.gz
