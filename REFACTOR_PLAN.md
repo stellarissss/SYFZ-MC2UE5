@@ -1656,4 +1656,66 @@ build_shipping 首编（含本修复）→ package → 品红/像素级视觉验
 首要嫌疑，probe_terrain_bounds.py 已就位待用）。
 
 ---
-*本文档为唯一权威计划。S0 定架构，S1–S4 已回填，S5 见 §8，S4.5 见 §8.10，S5.5/5.6 见 §8.13–8.45。*
+
+### 8.46 【2026-10-30】验收推进轮：碰撞落地、缝隙闭合、植被首通、俯视颜色定量
+
+**背景**：§8.45 定下的关键路径在本轮推进到「编辑器内容全部就位 + 运行时
+碰撞确认 + 俯视颜色定量比对」。两份独立验收报告
+（out/qa/truth_recalc_report.md、out/qa/pipeline_audit.md）交叉印证：
+几何/坐标链干净，缺陷集中在颜色层与「改了代码没重跑」。
+
+**编译链修复**（§8.43/§8.45 的 C++ 在此之前全部从未编译过）：
+- UBT 找不到 MSVC 的根因不是 VS 丢了，而是 `cmd //c "set A=...&& set B=%A%\x"`
+  的 %VAR% 整行解析期展开 —— UE_SDKS_ROOT 展开成了 `\AutoSDK`。
+  正解：bash 里 export 后进 cmd。工具链来自
+  AutoSDK/HostWin64/Win64/VS2022/14.44.35207（UBT 的 MSVC 分支原生枚举）。
+- 首编暴露 applylook 落盘 FString→const TCHAR*（C2664）×4 处，已修。
+- GTourStops 五机位镜像（§8.45 勘误的同一修复由并行会话提交 0d9bd82，
+  本会话独立重做后 rebase 合并）。
+
+**地形碰撞真正落地**（F5/F6）：
+- probe_collision_api.py 实测 UE 5.8：CollisionComplexity 枚举/setter 全没了，
+  唯一入口 BodySetup.collision_trace_flag，且必须在 build 之前设置。
+- 回读硬失败（废除静默 continue）。运行时探针 col 指标从「数 C_* 旧代理名」
+  （恒 0、无意义）改为数 BodySetup==CTF_UseComplexAsSimple 的瓦片数。
+  **运行时确认 terrain(vis=24 col=24)**，pawn onGround 落在实体上。
+- 新增 06_topdown 机位（GTourStops 加 ZOverride 字段，650m 俯视）。
+
+**瓦片缝隙闭合**（F1）+ 切线翻转（F3）：
+- facefam 裁掉每瓦片末行末列 → 18 条 X 缝 + 20 条 Z 缝的 100cm 空带。
+  修法「瓦片拥有自己 max 侧的 seam 条带」，全局逐 cell 计数验证
+  342,849/342,849 全覆盖、0 绕向错误；全局梯度让接缝两侧法线 0.02° 内
+  一致；max|tan·n| 从 0.144 → 7.4e-9。
+- pack 重跑 + 编辑器重建 24 瓦片（685,698 tri，含缝）。
+
+**植被 S4.5 首次跑通**（F10）：
+- build_vegetation_pack 65,151 方块 → 7 chunks → 编辑器导入
+  125,924/125,924 tris、7 个 Veg_ actor、碰撞标志回读通过。
+- 修了两个拦路 bug：manifest 的相对 obj_path（编辑器 cwd≠repo 全误报
+  missing）、碰撞 API 同病。已知瑕疵：组件级 collision_profile_name 在
+  5.8 不存在（告警不影响 BodySetup 碰撞）；**pawn 会站上树冠**（植被
+  BlockAll + 树冠约 41m），玩法层待调。
+
+**日志判据三重故障**（让 10-30 的 run_editor 误读 10-08 的 PASS）：
+- build_terrain_meshes/ensure_lighting/hide_voxel_layer 把 MC_LOG_DIR（目录）
+  直接当文件 open() → PermissionError 恒静默。全部改 join 文件名。
+- run_editor 增加陈旧日志判定（log mtime 早于步骤开始 → FAIL）。
+- apply_spawn/ensure_lighting 补齐 RESULT 行（8 步全覆盖）。
+
+**颜色定量验收（06_topdown vs out/ref_map.png）**：
+- ref_map 与独立真值 100.0000% 一致（truth-recalc），可作标尺。
+- 采样比对：跑道红 (161,83,78)→(176,82,65) 几乎重合；球场绿/白线同色相，
+  亮度偏差 4–12%（10 lux 太阳 + 天空 0.25 的亮度重映射，非材质错）。
+  **无品红、无棋盘格、无默认灰**；局部对比度 3.19（平铺纹理在工作）。
+  灰族塌陷（§8.23）待后续拆分，不影响「色相正确」判定。
+- LFS 入库：overworld.bin + Cube1x1x1.uasset 上游字节级验证通过
+  （lfs_push_via_batch.py 补上了被漏掉的 batch verify 步骤 —— PUT 成功
+  不等于登记成功）。
+
+**遗留**：打包验证（ENG-PKG1）；5 地面机位重拍；pawn 站树冠；
+overworld.bin 整文件 sha256 回读校验（网络中断未完，batch 侧已验）；
+atlas manifest 缺 29 族（仅影响旧 atlas 模式，block 模式不受影响）；
+extract_structures max_quad 列向不截断（F2，atlas 模式才触发）。
+
+---
+*本文档为唯一权威计划。S0 定架构，S1–S4 已回填，S5 见 §8，S4.5 见 §8.10，S5.5/5.6 见 §8.13–8.46。*
