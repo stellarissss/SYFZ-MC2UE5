@@ -102,6 +102,12 @@ def place_actor(world, name, mesh):
 def build_chunk(world, smes, t):
     name = t["name"]
     obj_path = t["obj_path"]
+    # The manifest stores what the pack step was given -- often a path
+    # relative to ITS cwd. The editor's cwd is the engine's, not the repo's,
+    # so anchor it to PACK (cwd-dependent lookups reported the files as
+    # "missing" while they sat right there on disk).
+    if not os.path.isabs(obj_path):
+        obj_path = os.path.join(PACK, os.path.basename(obj_path))
     if not os.path.isfile(obj_path):
         return {"name": name, "error": "missing %s" % obj_path}
 
@@ -120,35 +126,30 @@ def build_chunk(world, smes, t):
     # ---- collision ---------------------------------------------------------
     # CDO default was set before the import, so the built render data kept a
     # CPU-side index copy and the complex-as-simple trimesh will be real.
-    try:
-        smes.set_collision_complexity(
-            mesh, unreal.CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE)
-    except Exception as exc:
-        try:
-            mesh.set_editor_property(
-                "collision_complexity",
-                unreal.CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE)
-        except Exception as exc2:
-            return {"name": name,
-                    "error": "collision complexity: %s / %s"
-                             % (str(exc)[:60], str(exc2)[:60])}
+    # UE 5.8 (probe_collision_api.py): unreal.CollisionComplexity is gone and
+    # the subsystem has no setter -- BodySetup.collision_trace_flag is the
+    # authoritative input to the physics cook. Hard-fail on a bad read-back;
+    # a silent continue is how a missing flag hid for two days.
     try:
         body = mesh.get_editor_property("body_setup")
-        if body is not None:
-            body.set_editor_property(
-                "collision_trace_flag",
-                unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+        if body is None:
+            return {"name": name, "error": "body_setup is None"}
+        body.set_editor_property(
+            "collision_trace_flag",
+            unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
     except Exception as exc:
-        say("  %s: body_setup trace flag: %s (continuing)"
-            % (name, str(exc)[:80]))
+        return {"name": name,
+                "error": "body_setup collision_trace_flag: %s" % str(exc)[:100]}
 
     try:
-        got_cc = str(smes.get_collision_complexity(mesh))
-    except Exception:
-        got_cc = "?"
-    if "USE_COMPLEX_AS_SIMPLE" not in got_cc:
+        got_flag = mesh.get_editor_property("body_setup").get_editor_property(
+            "collision_trace_flag")
+    except Exception as exc:
         return {"name": name,
-                "error": "collision complexity reads back as %s" % got_cc}
+                "error": "collision read-back: %s" % str(exc)[:100]}
+    if got_flag != unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE:
+        return {"name": name,
+                "error": "collision_trace_flag reads back as %s" % got_flag}
 
     actor = place_actor(world, name, mesh)
     if actor is None:
