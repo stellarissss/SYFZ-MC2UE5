@@ -83,6 +83,40 @@ def main():
 
     nu, nv = sm.shape
     x0, z0 = CAMPUS[0], CAMPUS[2]
+
+    # Gradients over the GLOBAL height field, computed once. Per-tile
+    # np.gradient would see only one side of a tile boundary, so the two
+    # copies of a seam vertex would shade differently; global gradients also
+    # serve the seam vertices added below (audit F1).
+    sm64 = sm.astype(np.float64)
+    g_dzdx = np.gradient(sm64, axis=0) / float(BLOCK_CM)
+    g_dzdy = np.gradient(sm64, axis=1) / float(BLOCK_CM)
+
+    def vertex_aux(us, vs):
+        """Shading normal + U-tangent for vertices at global grid coords."""
+        nx, ny = -g_dzdx[us, vs], g_dzdy[us, vs]
+        nz = np.ones_like(nx)
+        ln = np.sqrt(nx * nx + ny * ny + nz * nz)
+        ln[ln == 0.0] = 1.0
+        n = np.stack([nx / ln, ny / ln, nz / ln], axis=1).astype(np.float32)
+        tz = g_dzdx[us, vs]
+        tl = np.sqrt(1.0 + tz * tz)
+        t = np.stack([np.full_like(nx, 1.0) / tl,
+                      np.zeros_like(nx), tz / tl], axis=1).astype(np.float32)
+        return n, t
+
+    def make_verts(us, vs):
+        """Vertex rows (pos/uv/nrm/tan) at global grid coords, Unreal cm."""
+        pos = np.empty((us.size, 3), dtype=np.float32)
+        pos[:, 0] = (x0 + us) * BLOCK_CM                    # UE X
+        pos[:, 1] = -(z0 + vs) * BLOCK_CM                   # UE Y (negated)
+        pos[:, 2] = sm[us, vs] * BLOCK_CM                   # UE Z (up)
+        uv = np.empty((us.size, 2), dtype=np.float32)
+        uv[:, 0] = us - tu                                  # U, block tiling
+        uv[:, 1] = 1.0 - (vs - tv)                          # V, flipped
+        nrm, tan = vertex_aux(us, vs)
+        return pos, uv, nrm, tan
+
     tiles = []
     tot_v = tot_t = 0
     for tu in range(0, nu, args.tile):
@@ -94,53 +128,10 @@ def main():
             w, d = bu - tu, bv - tv
             fam = fam_map[tu:bu, tv:bv]
 
-            # Vertices, row-major (i outer, j inner) -- the OBJ writer's order.
-            ii, jj = np.meshgrid(np.arange(tu, bu), np.arange(tv, bv),
-                                 indexing="ij")
-            pos = np.empty((w * d, 3), dtype=np.float32)
-            pos[:, 0] = (x0 + ii).ravel() * BLOCK_CM            # UE X
-            pos[:, 1] = -(z0 + jj).ravel() * BLOCK_CM           # UE Y (negated)
-            pos[:, 2] = sm[tu:bu, tv:bv].ravel() * BLOCK_CM     # UE Z (up)
-            uv = np.empty((w * d, 2), dtype=np.float32)
-            uv[:, 0] = ii.ravel() - tu                          # U
-            uv[:, 1] = 1.0 - (jj.ravel() - tv)                  # V, flipped
-
-            # Shading normals and tangents, per vertex.
-            #
-            # These cannot be left to the engine: a StaticMesh built from a
-            # UStaticMeshDescription copies whatever normals the description
-            # holds straight into the render data
-            # (StaticMeshVertex.TangentZ = VertexInstanceNormals[...]) and
-            # never computes them, so a script-built surface shades with a zero
-            # normal and renders black at any sun intensity. UE 5.8's Python API
-            # cannot set them, hence project/Source/.../MCMeshTools.cpp.
-            #
-            # Axes. The OBJ writer works in its own space (x, z, h) and negates
-            # Y on the way into Unreal, so in the FINAL Unreal space the
-            # surface is h(X, -Y) and dh/dY = -dzdy. The OBJ writer's normal
-            # (nx, ny, nz) = (-dzdx, -dzdy, 1) is therefore, after the same
-            # negation, (-dzdx, +dzdy, 1) -- which is what is written here, so
-            # the two paths agree.
-            step_cm = float(BLOCK_CM)   # one vertex per block
-            h = sm[tu:bu, tv:bv].astype(np.float64)
-            dzdx = np.gradient(h, axis=0) / step_cm
-            dzdy = np.gradient(h, axis=1) / step_cm
-            nrm = np.empty((w * d, 3), dtype=np.float32)
-            nrm[:, 0] = -dzdx.ravel()
-            nrm[:, 1] = dzdy.ravel()
-            nrm[:, 2] = 1.0
-            ln = np.sqrt((nrm * nrm).sum(axis=1))
-            ln[ln == 0.0] = 1.0
-            nrm /= ln[:, None]
-            # Tangent along +U, then made perpendicular to the normal by the
-            # writer; dZ/dX in Unreal space is dzdx.
-            tan = np.empty((w * d, 3), dtype=np.float32)
-            tan[:, 0] = 1.0
-            tan[:, 1] = 0.0
-            tan[:, 2] = -dzdx.ravel()
-            tl = np.sqrt((tan * tan).sum(axis=1))
-            tl[tl == 0.0] = 1.0
-            tan /= tl[:, None]
+            # Base grid, row-major (i outer, j inner) -- the OBJ writer's order.
+            us = np.arange(tu, bu).repeat(d)
+            vs = np.tile(np.arange(tv, bv), w)
+            pos, uv, nrm, tan = make_verts(us, vs)
 
             # Triangles per cell: (a,b,c) and (a,c,d) with a=(i,j),
             # b=(i+1,j), c=(i+1,j+1), d=(i,j+1) -- the OBJ writer's winding.
@@ -154,6 +145,71 @@ def main():
             tri[0::2, 0], tri[0::2, 1], tri[0::2, 2] = a, b, c
             tri[1::2, 0], tri[1::2, 1], tri[1::2, 2] = a, c, dd
             facefam = np.repeat(fam[:w - 1, :d - 1].ravel(), 2).astype(np.uint8)
+
+            # ---- seam strips (audit F1) ---------------------------------
+            # facefam drops every tile's last cell row/column, so between two
+            # neighbouring tiles a one-cell strip never became triangles --
+            # 18 X seams + 20 Z seams of 100 cm slits across the campus. The
+            # fix: a tile OWNS the seam on its max side. It emits the strip
+            # cells (i=w-1) and (j=d-1), borrowing the neighbour's first
+            # vertex row/column as extra vertices; the last tile in each
+            # dimension has no neighbour and correctly emits nothing.
+            # Local vertex layout: base 0..w*d-1, then (only when the
+            # neighbour exists) the X-seam column (d), the Z-seam row (w),
+            # and the corner vertex (1). Offsets are conditional -- a tile
+            # without an X neighbour must not reserve the X block.
+            quads = []
+            sx, sz = bu < nu, bv < nv
+            if sx:
+                pos2, uv2, nrm2, tan2 = make_verts(
+                    np.full(d, bu), np.arange(tv, bv))
+                pos = np.concatenate([pos, pos2])
+                uv = np.concatenate([uv, uv2])
+                nrm = np.concatenate([nrm, nrm2])
+                tan = np.concatenate([tan, tan2])
+            if sz:
+                pos2, uv2, nrm2, tan2 = make_verts(
+                    np.arange(tu, bu), np.full(w, bv))
+                pos = np.concatenate([pos, pos2])
+                uv = np.concatenate([uv, uv2])
+                nrm = np.concatenate([nrm, nrm2])
+                tan = np.concatenate([tan, tan2])
+            if sx and sz:
+                pos2, uv2, nrm2, tan2 = make_verts(
+                    np.array([bu]), np.array([bv]))
+                pos = np.concatenate([pos, pos2])
+                uv = np.concatenate([uv, uv2])
+                nrm = np.concatenate([nrm, nrm2])
+                tan = np.concatenate([tan, tan2])
+            xv0 = w * d                          # first X-seam vertex (k = row j)
+            zv0 = xv0 + (d if sx else 0)         # first Z-seam vertex (k = col i)
+            cv0 = zv0 + (w if sz else 0)         # corner vertex
+            if sx:
+                for j in range(d - 1):
+                    quads.append(((w - 1) * d + j, xv0 + j, xv0 + j + 1,
+                                  (w - 1) * d + j + 1,
+                                  fam[w - 1, j]))
+            if sz:
+                for i in range(w - 1):
+                    quads.append((i * d + (d - 1), (i + 1) * d + (d - 1),
+                                  zv0 + i + 1, zv0 + i,
+                                  fam[i, d - 1]))
+            if sx and sz:
+                quads.append((w * d - 1, xv0 + (d - 1),
+                              cv0, zv0 + (w - 1),
+                              fam[w - 1, d - 1]))
+            if quads:
+                # Cell (a,b,c,dd) -> triangles (a,b,c) and (a,c,dd), matching
+                # the base grid's tri[0::2]/tri[1::2] convention above.
+                q = np.array([(a_, b_, c_) for (a_, b_, c_, _dd, _f) in quads]
+                             + [(a_, c_, _dd)
+                                for (a_, b_, c_, _dd, _f) in quads],
+                             dtype=np.int32)
+                qfam = np.array([_f for (_a, _b, _c, _dd, _f) in quads]
+                                + [_f for (_a, _b, _c, _dd, _f) in quads],
+                                dtype=np.uint8)
+                tri = np.concatenate([tri, q])
+                facefam = np.concatenate([facefam, qfam])
 
             keep = facefam > 0
             if not keep.any():
