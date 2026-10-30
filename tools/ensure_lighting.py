@@ -180,6 +180,7 @@ def main():
                 world = unreal.EditorLevelLibrary.get_editor_world()
         if world is None:
                 say("FAIL: no editor world")
+                say("RESULT: FAIL no editor world")
                 return 1
 
         sun = find_existing(world, unreal.DirectionalLight, "MC_Sun")
@@ -220,11 +221,12 @@ def main():
         if not suns:
                 say("FAIL: no DirectionalLight in the level after the fix -- nothing "
                         "will be lit")
+                say("RESULT: FAIL no DirectionalLight after the fix")
                 return 1
 
         unreal.EditorLevelLibrary.save_current_level()
         say("level saved")
-        say("done")
+        say("RESULT: PASS sun=%d skylight=%d" % (len(suns), len(skies)))
         return 0
 
 

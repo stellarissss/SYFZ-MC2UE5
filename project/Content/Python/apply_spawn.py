@@ -7,6 +7,7 @@ hand-picking it put the camera inside a birch tree (leaves at y=11..20 over a
 start at y=5) and the first frame was the inside of a canopy.
 """
 import json
+import os
 import traceback
 
 import unreal
@@ -35,6 +36,7 @@ try:
     starts = unreal.GameplayStatics.get_all_actors_of_class(w, unreal.PlayerStart)
     say("PlayerStart actors: %d" % len(starts))
     if not starts:
+        say("RESULT: FAIL no PlayerStart in the level")
         raise SystemExit
 
     # Coordinate convention (the mirror fix, REFACTOR_PLAN §8.43):
@@ -54,6 +56,16 @@ try:
     say("PlayerStart -> (%.0f, %.0f, %.0f) yaw=%.1f"
         % (got.x, got.y, got.z, t.get_actor_rotation().yaw))
 
+    # Measure the move rather than assume it: build_world's verdict for this
+    # step is the RESULT line below, so back it with a real check.
+    dx = got.x - loc.x
+    dy = got.y - loc.y
+    dz = got.z - loc.z
+    drift_cm = (dx * dx + dy * dy + dz * dz) ** 0.5
+    if drift_cm > 1.0:
+        say("RESULT: FAIL PlayerStart drifted %.2f cm from the spec" % drift_cm)
+        raise SystemExit
+
     for p in unreal.GameplayStatics.get_all_actors_of_class(
             w, unreal.MCReplicaCharacter):
         p.set_actor_location(loc, False, True)
@@ -62,6 +74,11 @@ try:
 
     unreal.EditorLevelLibrary.save_current_level()
     say("saved")
+    say("RESULT: PASS PlayerStart at (%.0f, %.0f, %.0f) yaw=%.1f drift=%.2fcm"
+        % (got.x, got.y, got.z, t.get_actor_rotation().yaw, drift_cm))
+except SystemExit:
+    raise
 except Exception:
-    say("FAILED:/n" + traceback.format_exc())
+    say("FAILED:\n" + traceback.format_exc())
+    say("RESULT: FAIL apply_spawn crashed (see traceback above)")
 say("--- done ---")
