@@ -65,12 +65,14 @@ import unreal
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACK = os.path.join(REPO, "out/terrain_pack")
-# MC_LOG_DIR overrides where every MC script writes its report; the default
-# keeps the historical location on this host (<repo>/../logs), so existing
-# reading habits and tooling keep working from a checkout at G:/BaiduNetdiskDownload/real/MC2UE5/repo.
-OUT = os.environ.get("MC_LOG_DIR",
-                     os.path.join(os.path.dirname(REPO), "logs",
-                                  "build_terrain_meshes.txt"))
+# MC_LOG_DIR overrides where every MC script writes its report -- it is a
+# DIRECTORY (the other scripts join their own filename onto it). Joining is
+# not optional: using it directly made open() hit the directory itself and
+# fail with PermissionError(13) on every editor-side run, which is how
+# build_world ended up reading a 10-08 PASS out of a stale log on 10-30.
+OUT = os.path.join(os.environ.get("MC_LOG_DIR",
+                                  os.path.join(os.path.dirname(REPO), "logs")),
+                   "build_terrain_meshes.txt")
 L = []
 
 
@@ -80,8 +82,10 @@ def say(s):
     try:
         with open(OUT, "w") as fh:
             fh.write("\n".join(L) + "\n")
-    except OSError:
-        pass
+    except OSError as exc:
+        # A silent failure here is how build_world read the 10-08 PASS from a
+        # stale log on 10-30 while the run was actually failing. Surface it.
+        unreal.log("[MCTERBUILD] LOG WRITE FAILED (%s): %r" % (OUT, exc))
 
 
 def read_array(path, typecode, per_item):
@@ -242,6 +246,29 @@ def build_tile(t):
     # raced the save and crashed the background worker with
     # "Assertion failed: (Index >= 0) & (Index < ArrayNum) [Array.h:1339]".
     # Overridable so the choice can be revisited rather than hard-coded.
+
+    # ---- collision, set BEFORE the build -----------------------------------
+    # Complex-as-simple gives per-triangle collision matching the smoothed
+    # surface exactly. UE 5.8's Python API (probed 10-30,
+    # tools/probe_collision_api.py): the old routes are GONE --
+    # unreal.CollisionComplexity does not exist,
+    # StaticMeshEditorSubsystem has get_collision_complexity but no setter,
+    # and StaticMesh carries no collision_complexity property. What remains
+    # is BodySetup.collision_trace_flag -- the authoritative input to the
+    # physics cook. It must be set before build_from_static_mesh_descriptions
+    # so the trimesh cooks with it; allow_cpu_access (set above, before the
+    # render data exists) is what keeps the cooked trimesh non-empty.
+    try:
+        body = asset.get_editor_property("body_setup")
+        if body is None:
+            return {"name": name, "error": "body_setup is None"}
+        body.set_editor_property(
+            "collision_trace_flag",
+            unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+    except Exception as exc:
+        return {"name": name,
+                "error": "body_setup collision_trace_flag: %s" % str(exc)[:140]}
+
     asset.build_from_static_mesh_descriptions(
         [smd], build_simple_collision=False,
         fast_build=os.environ.get("MC_FAST_BUILD", "0") == "1")
@@ -264,46 +291,19 @@ def build_tile(t):
                 "error": "normals written %s, expected %d"
                          % (written, want * 3)}
 
-    # ---- collision ---------------------------------------------------------
-    # This is the fix for "the visible terrain has no collision": until now the
-    # 24 tiles were built with no collision at all, and the pawn was silently
-    # standing on the *hidden* voxel layer's collision (ensure_lighting.py
-    # documents that state). Complex-as-simple gives per-triangle collision
-    # matching the smoothed surface exactly. The API sequence is the one proven
-    # in refix_collision.py; allow_cpu_access was already set before the build.
-    smes = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+    # ---- collision read-back ------------------------------------------------
+    # A flag that reads back as Default means the trimesh will be empty and
+    # the player will fall through; treat it as a hard error, never continue
+    # (the 10-30 run's silent continue is exactly what hid this for two days).
     try:
-        smes.set_collision_complexity(
-            asset, unreal.CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE)
+        got_flag = asset.get_editor_property("body_setup").get_editor_property(
+            "collision_trace_flag")
     except Exception as exc:
-        try:
-            asset.set_editor_property(
-                "collision_complexity",
-                unreal.CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE)
-        except Exception as exc2:
-            return {"name": name,
-                    "error": "collision complexity: %s / %s"
-                             % (str(exc)[:80], str(exc2)[:80])}
-    try:
-        body = asset.get_editor_property("body_setup")
-        if body is not None:
-            body.set_editor_property(
-                "collision_trace_flag",
-                unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
-    except Exception as exc:
-        say("  %-22s body_setup trace flag: %s (complexity is set; "
-            "continuing)" % (name, str(exc)[:100]))
-
-    # Read back what will actually be cooked -- a set flag that reads back as
-    # Default means the trimesh will be empty and the player will fall through.
-    try:
-        got_cc = smes.get_collision_complexity(asset)
-    except Exception:
-        got_cc = asset.get_editor_property("collision_complexity")
-    if str(got_cc) not in ("CollisionComplexity.CTC_USE_COMPLEX_AS_SIMPLE",
-                           "CTC_USE_COMPLEX_AS_SIMPLE"):
         return {"name": name,
-                "error": "collision complexity reads back as %s" % got_cc}
+                "error": "collision read-back: %s" % str(exc)[:140]}
+    if got_flag != unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE:
+        return {"name": name,
+                "error": "collision_trace_flag reads back as %s" % got_flag}
 
     unreal.EditorAssetLibrary.save_loaded_asset(asset)
 

@@ -31,10 +31,12 @@ import traceback
 
 import unreal
 
-OUT = os.environ.get("MC_LOG_DIR",
-                     os.path.join(os.path.dirname(os.path.dirname(
-                         os.path.abspath(__file__))), "..", "logs",
-                         "hide_voxel_layer.txt"))
+# MC_LOG_DIR is a DIRECTORY; join the filename (see build_terrain_meshes.py).
+OUT = os.path.join(os.environ.get(
+    "MC_LOG_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "..", "logs")),
+    "hide_voxel_layer.txt")
 MAP = "/Game/Maps/MCReplica"
 L = []
 

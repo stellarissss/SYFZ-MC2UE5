@@ -38,10 +38,13 @@ import sys
 
 import unreal
 
-OUT = os.environ.get("MC_LOG_DIR",
-                     os.path.join(os.path.dirname(os.path.dirname(
-                         os.path.abspath(__file__))), "..", "logs",
-                         "ensure_lighting.txt"))
+# MC_LOG_DIR is a DIRECTORY; join the filename (using it directly made open()
+# hit the directory and fail with PermissionError on every build_world run).
+OUT = os.path.join(os.environ.get(
+    "MC_LOG_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "..", "logs")),
+    "ensure_lighting.txt")
 _lines = []
 
 

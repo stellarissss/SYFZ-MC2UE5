@@ -148,6 +148,17 @@ def run_editor(step, script, extra_env=None):
     except Exception:
         verdict = "NO LOG at %s" % log_path
     ok = verdict is not None and "PASS" in verdict
+    # A log that predates this step is a trap: on 10-30 the terrain step
+    # failed inside the editor, its log write failed too, and the verdict
+    # came from the 10-08 PASS still sitting in the file. The step's own log
+    # must have been touched during THIS run to count as evidence.
+    try:
+        if os.path.getmtime(log_path) < t0 - 1:
+            verdict = "STALE LOG (not written during this step; last says: %s)" \
+                % verdict
+            ok = False
+    except OSError:
+        pass
     _log_result(step, ok, time.time() - t0,
                 "exit=%d | %s" % (proc.returncode, verdict))
     _say("         %s" % verdict)
