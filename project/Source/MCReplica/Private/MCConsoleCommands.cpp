@@ -113,13 +113,18 @@ namespace
                         // read as "terrain is missing" for several rounds.
                         if (MN.Contains(TEXT("terrain_")) || MN.Contains(TEXT("overworld")))
                         {
-                                if (MN.StartsWith(TEXT("C_")))
+                                ++TerrainVisual;
+                                // "col" used to count meshes named C_* -- an old pipeline's
+                                // proxy naming that can never match the current tiles, so
+                                // col read 0 forever regardless of reality. What we actually
+                                // want to know is whether the tile will collide: complex-as-
+                                // simple is set on the BodySetup at build time and is what
+                                // the physics cook honours.
+                                const UBodySetup* BS = M->GetBodySetup();
+                                if (BS && BS->CollisionTraceFlag
+                                        == ECollisionTraceFlag::CTF_UseComplexAsSimple)
                                 {
                                         ++TerrainCollision;
-                                }
-                                else
-                                {
-                                        ++TerrainVisual;
                                 }
                         }
                 }
@@ -838,6 +843,10 @@ namespace
                 double Y;
                 double Yaw;
                 double Pitch;
+                /** > 0 parks the camera at this absolute Z instead of tracing
+                    the ground: the top-down stop photographs the whole campus
+                    from above, not its own shoes. */
+                double ZOverride = 0.0;
         };
 
         const FMCTourStop GTourStops[] = {
@@ -846,6 +855,9 @@ namespace
                 { TEXT("03_tall_block"),    7500.0,  50000.0, 180.0,   6.0 },
                 { TEXT("04_west_band"),    11500.0,  30000.0, 135.0,  -2.0 },
                 { TEXT("05_field_axis"),    9600.0,  34000.0,  90.0,  -4.0 },
+                // Campus centre, 650 m up, straight down -- the frame that
+                // gets compared against out/ref_map.png for colour acceptance.
+                { TEXT("06_topdown"),       7950.0,  35200.0,  90.0, -90.0, 65000.0 },
         };
 
         /** Index of the stop being captured, and the timer that advances it. */
@@ -891,16 +903,23 @@ namespace
 
                 // Land on whatever is actually there rather than trusting a height: a
                 // hard-coded Z buries the camera in a building the first time the level
-                // changes.
+                // changes. A stop with ZOverride pins the altitude instead.
                 double Z = 20000.0;
-                FHitResult Hit;
-                FCollisionQueryParams P(SCENE_QUERY_STAT(MCTourGround), false);
-                P.AddIgnoredActor(Pawn);
-                if (W->LineTraceSingleByChannel(Hit,
-                                FVector(Stop.X, Stop.Y, 20000.0),
-                                FVector(Stop.X, Stop.Y, -20000.0), ECC_Visibility, P))
+                if (Stop.ZOverride > 0.0)
                 {
-                        Z = Hit.ImpactPoint.Z;
+                        Z = Stop.ZOverride - 5.0;   // +5.0 below puts it back exactly
+                }
+                else
+                {
+                        FHitResult Hit;
+                        FCollisionQueryParams P(SCENE_QUERY_STAT(MCTourGround), false);
+                        P.AddIgnoredActor(Pawn);
+                        if (W->LineTraceSingleByChannel(Hit,
+                                        FVector(Stop.X, Stop.Y, 20000.0),
+                                        FVector(Stop.X, Stop.Y, -20000.0), ECC_Visibility, P))
+                        {
+                                Z = Hit.ImpactPoint.Z;
+                        }
                 }
                 Pawn->SetActorLocation(FVector(Stop.X, Stop.Y, Z + 5.0), false, nullptr,
                         ETeleportType::TeleportPhysics);

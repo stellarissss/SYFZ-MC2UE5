@@ -49,6 +49,7 @@ STOPS = [
     (2, "tall_block"),       # looking up at the tallest block
     (3, "west_band"),        # oblique across the west facade band
     (4, "field_axis"),       # along the field axis
+    (5, "topdown"),          # campus centre from 650 m, straight down
 ]
 
 
