@@ -744,7 +744,7 @@ void AMCFrameCaptureGameMode::BeginPlay()
                 FFileHelper::SaveStringToFile(
                         FString::Printf(TEXT("parse bAnyOff=%d spec=%s t=%.2f\r\n"),
                                 bAnyOff ? 1 : 0, *Spec.Describe(), GetWorld()->GetTimeSeconds()),
-                        MCTextLogPath(TEXT("mclayers.txt")),
+                        *MCTextLogPath(TEXT("mclayers.txt")),
                         FFileHelper::EEncodingOptions::AutoDetect,
                         &IFileManager::Get(), FILEWRITE_Append);
                 if (bAnyOff)
@@ -757,7 +757,7 @@ void AMCFrameCaptureGameMode::BeginPlay()
                                         FFileHelper::SaveStringToFile(
                                                 FString::Printf(TEXT("apply  spec=%s -> %s\r\n"),
                                                         *Spec.Describe(), *Census.Describe()),
-                                                MCTextLogPath(TEXT("mclayers.txt")),
+                                                *MCTextLogPath(TEXT("mclayers.txt")),
                                                 FFileHelper::EEncodingOptions::AutoDetect,
                                                 &IFileManager::Get(), FILEWRITE_Append);
                                 }), 6.0f, /*bLoop*/ false);
@@ -1255,7 +1255,7 @@ void AMCFrameCaptureGameMode::ApplyLook()
                                 M ? *M->GetName() : TEXT("*** NULL ***"));
                 }
                 FFileHelper::SaveStringToFile(Report,
-                        MCTextLogPath(TEXT("asset_probe.txt")),
+                        *MCTextLogPath(TEXT("asset_probe.txt")),
                         FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(),
                         FILEWRITE_Append);
         }
@@ -1279,7 +1279,7 @@ void AMCFrameCaptureGameMode::ApplyLook()
                 {
                         LastLookLine = Line;
                         FFileHelper::SaveStringToFile(Line,
-                                MCTextLogPath(TEXT("applylook.txt")),
+                                *MCTextLogPath(TEXT("applylook.txt")),
                                 FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(),
                                 FILEWRITE_Append);
                 }
