@@ -22,16 +22,26 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import extract_structures as E                          # noqa: E402
-from build_atlas import (ATLAS_DEFAULTS, ATLAS_FAMILIES,  # noqa: E402
-                         plan_layout)
+from block_textures import slot_names, slots_of         # noqa: E402
 
-LAYOUT = plan_layout(ATLAS_FAMILIES, **ATLAS_DEFAULTS)
+#: 1-based slot -> original Minecraft texture name. Slot 0 is air, slot 1 is
+#: the generated `other` fallback. `extract_structures.SLOT_NAMES` is
+#: `slot_names()` too, so the two agree by construction; this module-level copy
+#: exists so the assertions below read as data, not as a call.
+SLOTS = slot_names()
 
 
 def mesh(solid, mat=None, cap=4, offset=(0, 0)):
+    """Mesh with one material volume reused for all three faces by default.
+
+    The mesher takes a (top, side, bottom) triple now, so a single volume has to
+    be replicated explicitly -- passing one array would unpack its first axis
+    into three wrong-shaped "volumes" instead of failing.
+    """
     if mat is None:
-        mat = solid.astype(np.uint8)
-    return E.mesh_volume(solid, solid, mat, cap, offset)
+        mat = solid.astype(np.uint16)
+    mats = tuple(mat) if isinstance(mat, (tuple, list)) else (mat, mat, mat)
+    return E.mesh_volume(solid, solid, mats, cap, offset)
 
 
 def read_obj(path):
@@ -242,7 +252,7 @@ class TestGreedyMerging(unittest.TestCase):
     def test_merge_respects_material(self):
         """Two materials side by side must not merge into one quad.
 
-        This is the atlas-correctness test: a merged quad spanning two cells
+        This is the slot-correctness test: a merged quad spanning two slots
         would stretch one texture over both, and the seam is invisible in a
         triangle count.
         """
@@ -265,67 +275,81 @@ class TestGreedyMerging(unittest.TestCase):
         self.assertGreater(len(quads), 4)
 
 
-class TestAtlasUVs(unittest.TestCase):
-    def test_uvs_stay_inside_their_cell(self):
-        """Every UV must land in exactly one atlas cell.
+class TestBlockUnitUVs(unittest.TestCase):
+    """UVs are block units: exactly one texture repeat per block.
 
-        The failure this catches is subtle and expensive: a UV a texel outside
-        its cell samples the neighbour family, so a wall of 'quartz' quietly
-        gains a stripe of 'brick' along one edge, at every mip level.
-        """
+    This class used to assert "every UV lands inside one cell of the packed
+    atlas". There is no atlas any more -- each slot is its own 16x16 texture,
+    sampled with Wrap -- so "inside its cell" is not a property of anything and
+    the layout assertions (cell overlap, atlas power-of-two) are deleted rather
+    than weakened: they described a container that no longer exists.
+
+    The failure they guarded against is still real, though. A quad whose UV
+    spans more than the quad's own width/height stretches one texture over a
+    merged facade instead of repeating per block, and nothing in the OBJ says
+    so. That is what is asserted here: each quad's four UVs must be exactly the
+    corners of [0, w] x [0, h], where w/h are the quad's block extents.
+    """
+
+    def test_uvs_span_exactly_the_quad(self):
         s = np.zeros((9, 6, 6), bool)
         s[1:8, 1:5, 1:5] = True
-        mat = np.zeros((9, 6, 6), np.uint8)
+        mat = np.zeros((9, 6, 6), np.uint16)
         mat[1:8, 1:5, 1:5] = 1
         corners, uvs, normals, quads = mesh(s, mat=mat, cap=4)
-        scaled = E.scale_uvs(uvs, quads, LAYOUT)
-        for base, slot, _w, _h in quads:
-            fam = ATLAS_FAMILIES[slot - 1]
-            u0, v0, u1, v1 = LAYOUT[fam]["uv"]
-            for k in range(4):
-                u, v = scaled[base + k]
-                self.assertGreaterEqual(u, u0 - 1e-9)
-                self.assertLessEqual(u, u1 + 1e-9)
-                self.assertGreaterEqual(v, v0 - 1e-9)
-                self.assertLessEqual(v, v1 + 1e-9)
+        self.assertGreater(len(quads), 0)
+        for base, slot, w, h in quads:
+            got = sorted((round(float(u), 6), round(float(v), 6))
+                         for u, v in uvs[base:base + 4])
+            want = sorted([(0.0, 0.0), (float(w), 0.0),
+                           (float(w), float(h)), (0.0, float(h))])
+            self.assertEqual(got, want,
+                             "quad %d (%dx%d) UVs %s do not span one repeat "
+                             "per block" % (base // 4, w, h, got))
 
-    def test_every_family_has_a_cell(self):
-        for fam in ATLAS_FAMILIES:
-            self.assertIn(fam, LAYOUT)
-            u0, v0, u1, v1 = LAYOUT[fam]["uv"]
-            self.assertLess(u0, u1)
-            self.assertLess(v0, v1)
+    def test_every_quad_carries_a_legal_slot(self):
+        """A slot of 0 would name SLOTS[-1]; past the end would IndexError."""
+        s = np.zeros((9, 6, 6), bool)
+        s[1:8, 1:5, 1:5] = True
+        mat = np.zeros((9, 6, 6), np.uint16)
+        mat[1:8, 1:5, 1:5] = 7
+        _c, _uv, _n, quads = mesh(s, mat=mat, cap=8)
+        for _base, slot, _w, _h in quads:
+            self.assertGreaterEqual(int(slot), 1)
+            self.assertLessEqual(int(slot), len(SLOTS))
 
-    def test_cells_do_not_overlap(self):
-        seen = {}
-        for fam in ATLAS_FAMILIES:
-            px = LAYOUT[fam]["px"]
-            for x in range(px[0], px[2]):
-                for y in range(px[1], px[3]):
-                    key = (x, y)
-                    self.assertNotIn(key, seen,
-                                     "cell overlap at %s: %s and %s"
-                                     % (key, seen.get(key), fam))
-                    seen[key] = fam
+    def test_slot_table_is_1_based_and_unique(self):
+        """Slot 1 is the fallback and no two slots share a texture name.
 
-    def test_atlas_is_power_of_two(self):
-        """Non-POT atlases cross-contaminate families under mip reduction."""
-        a = LAYOUT["_atlas"]
-        for dim in (a["width"], a["height"]):
-            self.assertEqual(dim & (dim - 1), 0,
-                             "atlas dimension %d is not a power of two" % dim)
+        Duplicates would mean two slots that must be textured identically --
+        a silent doubling of the import work and of the material count.
+        """
+        self.assertEqual(SLOTS[0], "other")
+        self.assertEqual(len(set(SLOTS)), len(SLOTS),
+                         "duplicate slot names in the table")
+        for name in ("minecraft:stone", "minecraft:grass_block",
+                     "minecraft:water", "minecraft:oak_planks"):
+            for slot in slots_of(name):
+                self.assertTrue(1 <= slot <= len(SLOTS),
+                                "%s -> slot %d outside 1..%d"
+                                % (name, slot, len(SLOTS)))
 
 
 class TestMaterialVolume(unittest.TestCase):
-    """The voxel -> family map, checked for internal consistency.
+    """The voxel -> per-face slot map, checked for internal consistency.
 
     These exist because of a specific bug: the block name was resolved only on
     the first chunk that used a given palette index, so on every later chunk the
-    name leaked from the previous iteration. A voxel's `nameid` and its `family`
-    then came from two different blocks and nothing detected it -- the water
-    layer rendered with brick, rock and wood while still being *called* water.
-    Asserting that name and family agree catches that class of bug without
+    name leaked from the previous iteration. A voxel's `nameid` and its material
+    slot then came from two different blocks and nothing detected it -- the
+    water layer rendered with brick, rock and wood while still being *called*
+    water. Asserting that name and slot agree catches that class of bug without
     needing to know the right answer for every block.
+
+    The cache now stores three slot volumes (top / side / bottom) rather than one
+    19-family code, so every assertion here is made on all three: a face that
+    disagrees with its siblings about whether the voxel exists is the same class
+    of silent wrong answer.
     """
 
     CACHE = "out/materials/voxelmat.npz"
@@ -335,52 +359,83 @@ class TestMaterialVolume(unittest.TestCase):
             self.skipTest("run tools/extract_structures.py first")
         self.z = np.load(self.CACHE, allow_pickle=False)
         self.names = [str(s) for s in self.z["names"]]
+        self.mats = (self.z["top"], self.z["side"], self.z["bottom"])
 
-    def test_family_matches_name_for_every_voxel(self):
-        nameid, fam = self.z["nameid"], self.z["family"]
-        solid = fam != 0
-        # Map every distinct (nameid, family) pair actually present.
-        pairs = np.unique(np.stack([nameid[solid], fam[solid]], axis=1),
-                          axis=0)
-        self.assertGreater(len(pairs), 50, "suspiciously few name/family pairs")
+    def test_every_solid_voxel_has_a_legal_slot_on_all_three_faces(self):
+        """top/side/bottom must agree on occupancy and all be 1..len(SLOTS).
+
+        Slot 0 is air, so a solid voxel carrying 0 on any face would be
+        textured with whatever happens to sit at index -1 -- silently, since
+        SLOTS[-1] is a perfectly valid name.
+        """
+        solid = self.mats[0] != 0
+        self.assertGreater(int(solid.sum()), 0)
+        n = len(SLOTS)
+        for label, vol in zip(("top", "side", "bottom"), self.mats):
+            np.testing.assert_array_equal(
+                vol != 0, solid,
+                err_msg="%s disagrees with top about which voxels exist" % label)
+            filled = vol[solid]
+            self.assertGreaterEqual(int(filled.min()), 1,
+                                    "%s has slot 0 on a solid voxel" % label)
+            self.assertLessEqual(int(filled.max()), n,
+                                 "%s has slot %d, table has %d entries"
+                                 % (label, int(filled.max()), n))
+
+    def test_slot_matches_name_for_every_voxel(self):
+        nameid = self.z["nameid"]
+        top, side, bottom = self.mats
+        solid = top != 0
+        # Every distinct (nameid, top, side, bottom) combination actually used.
+        quads = np.unique(np.stack([nameid[solid], top[solid],
+                                    side[solid], bottom[solid]], axis=1), axis=0)
+        self.assertGreater(len(quads), 50, "suspiciously few name/slot tuples")
         bad = []
-        for nid, f in pairs:
-            expected = E.family_of(self.names[int(nid)])
-            # Slots are numbered over SLOT_NAMES (atlas families + colour
-            # variants), not over ATLAS_FAMILIES: a dyed block is tagged with
-            # its variant name, so reading the slot through the atlas list
-            # would both mislabel it and hide the variant entirely.
-            if E.SLOT_NAMES[int(f) - 1] != expected:
-                bad.append((self.names[int(nid)], E.SLOT_NAMES[int(f) - 1],
-                            expected))
+        for nid, t, s, b in quads:
+            name = self.names[int(nid)]
+            # Re-derived from the block NAME, not from the palette, so a leak
+            # between two palette entries shows up as a mismatch here.
+            expected = tuple(SLOTS[v - 1] for v in slots_of(name))
+            got = (SLOTS[int(t) - 1], SLOTS[int(s) - 1],
+                   SLOTS[int(b) - 1])
+            if got != expected:
+                bad.append((name, got, expected))
         self.assertEqual(bad, [],
-                         "%d block names carry the wrong material family: %s"
+                         "%d block names carry the wrong texture slot: %s"
                          % (len(bad), bad[:8]))
 
-    def test_generated_families_are_reachable(self):
-        """The two generated cells must be reachable, or they are dead weight.
+    def test_the_generated_fallback_slot_is_never_sampled(self):
+        """Slot 1 `other` is generated, not from the save, so nothing may use it.
 
-        `path` and `asphalt` legitimately go unsampled -- this save has no
-        dirt_path or asphalt blocks -- so requiring every family to appear would
-        be asserting something untrue about the data. The generated cells are
-        different: they exist only because the mesh needs them, so if nothing
-        maps to one it is either a bug or a cell that should be dropped.
+        The inverted form of the old "generated families are reachable" test.
+        `other` used to be the landing place for blocks the family mappers did
+        not know, so *not* seeing it would have meant the fallback was dead
+        weight. Now `other` exists only as a visible "unresolved" grey, and the
+        table's whole job is to resolve every campus block to real art: a voxel
+        on slot 1 means a block name fell through the manifest and would render
+        as a flat neutral block. That is a bug, so the assertion is that it does
+        not happen -- while the fallback still answers for an unknown name.
         """
-        used = {ATLAS_FAMILIES[int(f) - 1]
-                for f in np.unique(self.z["family"]) if f}
-        for fam in ("other", "water"):
-            self.assertIn(fam, used,
-                          "generated family %r is never sampled" % fam)
+        used = {int(v) for vol in self.mats for v in np.unique(vol)}
+        self.assertIn(0, used, "no air in the volume; the cache looks wrong")
+        self.assertNotIn(1, used,
+                         "fallback slot 1 (%r) is sampled by real voxels"
+                         % SLOTS[0])
+        self.assertEqual(slots_of("minecraft:this_block_does_not_exist"),
+                         (1, 1, 1), "the fallback path no longer resolves")
 
-    def test_water_voxels_are_the_water_family(self):
+    def test_water_voxels_use_the_water_slot(self):
         role_path = "out/classify/rolevolume.npy"
         if not os.path.isfile(role_path):
             self.skipTest("no role volume")
         role = np.load(role_path)
         w = role == E.WATER
         self.assertGreater(int(w.sum()), 0)
-        fams = {ATLAS_FAMILIES[int(f) - 1] for f in np.unique(self.z["family"][w])}
-        self.assertEqual(fams, {"water"})
+        want = {SLOTS[s - 1] for s in slots_of("minecraft:water")}
+        got = set()
+        for vol in self.mats:
+            got |= {SLOTS[int(f) - 1] for f in np.unique(vol[w]) if f}
+        self.assertEqual(got, want)
 
 
 class TestOutputFiles(unittest.TestCase):
@@ -446,16 +501,17 @@ class TestOutputFiles(unittest.TestCase):
         self.assertIsNotNone(self.man["water"]["obj"])
         self.assertGreater(self.man["water"]["blocks"], 0)
 
-    def test_water_layer_uses_only_the_water_family(self):
+    def test_water_layer_uses_only_the_water_slot(self):
         """A water face textured with brick is the stale-cache bug, visible.
 
-        `build_material_volume` caches the voxel->family map. When a mapping
+        `build_material_volume` caches the voxel->slot map. When a mapping
         rule changes and the cache is not invalidated, the old map keeps being
         served and every run still reports success -- the water layer came out
         carrying brick, rock and wood because of exactly that. One assertion on
         the emitted material list turns a silent wrong answer into a failure.
         """
-        self.assertEqual(self.man["water"]["material_slots"], ["water"])
+        want = sorted({SLOTS[s - 1] for s in slots_of("minecraft:water")})
+        self.assertEqual(self.man["water"]["material_slots"], want)
 
     def test_material_cache_is_not_stale(self):
         """The cache must record the inputs that produced it."""
@@ -467,7 +523,7 @@ class TestOutputFiles(unittest.TestCase):
         self.assertIn("stamp", z.files,
                       "cache has no stamp; it cannot know it is stale")
         stamp = json.loads(str(z["stamp"][0]))
-        self.assertEqual(stamp["atlas_families"], ATLAS_FAMILIES)
+        self.assertEqual(stamp["slot_names"], slot_names())
         self.assertEqual(stamp["campus"], list(E.CAMPUS))
 
 

@@ -136,13 +136,17 @@ def build_tile(t):
         return {"name": name,
                 "error": "nrm/tan length %d/%d != pos %d"
                          % (len(nrm), len(tan), len(pos))}
-    fam = array.array("B")
+    # "H" = uint16: the slot table is one entry per original block texture
+    # (274 today), so a byte would wrap. A stale uint8 pack is caught by the
+    # triangle-count check below rather than mis-read.
+    fam = array.array("H")
     with open(os.path.join(PACK, name + ".fam"), "rb") as fh:
         fam.frombytes(fh.read())
 
     want = len(tri)
-    # `.fam` carries the absolute ATLAS_FAMILIES slot; `slots` lists only the
-    # families present in this tile. Pair them by position to get the name.
+    # `.fam` carries the absolute SLOT_NAMES slot (out/textures/slots.json);
+    # `slots` lists only the slots present in this tile. Pair them by position
+    # to get the name.
     slot_numbers = list(t["slot_numbers"])
     slots = list(t["slots"])
     name_of_slot = dict(zip(slot_numbers, slots))

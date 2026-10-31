@@ -60,7 +60,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 from block_families import FAMILIES                                  # noqa: E402
 from classify import CAMPUS, MAX_Y, STRUCTURE, DETAIL, WATER         # noqa: E402
-from build_atlas import ATLAS_DEFAULTS, ATLAS_FAMILIES, plan_layout  # noqa: E402
 
 BLOCK_CM = 100.0
 
@@ -71,44 +70,21 @@ BLOCK_CM = 100.0
 MC_TO_UE = (0, 2, 1)
 
 
-#: Every name a mesh can be tagged with: the atlas families first, then the
-#: colour variants (brick_pink, fabric_lime, ...). Order matters -- this is the
-#: 1-based slot stored per voxel in the material volume AND the material index
-#: written into the OBJ, so the two have to agree. The atlas families keep
-#: their existing positions so a slot number never silently changes meaning.
+#: Every name a mesh can be tagged with. Order matters -- this is the 1-based
+#: slot stored per voxel in the material volume AND the material index written
+#: into the OBJ, so the two have to agree.
 #:
-#: This has to exist because block_families.family_key() can return a variant
-#: name, and a lookup built from ATLAS_FAMILIES alone would raise KeyError on
-#: every dyed block.
-def _slot_names():
-    from block_families import VARIANT_TARGET as _VARS
-    names = list(ATLAS_FAMILIES)
-    for v in sorted(_VARS):
-        if v not in names:
-            names.append(v)
-    return names
+#: The slots are the ORIGINAL Minecraft block textures (tools/block_textures.py),
+#: not the 19 photographic families. Measured reason (2026-10-30): 260 block
+#: names -> 19 families put cobblestone, stone_bricks, end_stone_bricks and
+#: smooth_stone on one flat grey photo, and a 512 px photo shown on a 16-20 px
+#: block is its own 16x16 mip, i.e. a flat average -- per-block contrast sigma
+#: 11.6 against 45.6 for the real art. Pixel art authored at 16 px per block is
+#: the only source that survives the display density the game actually has.
+from block_textures import slot_names as _texture_slots, slots_of  # noqa: E402
 
+SLOT_NAMES = _texture_slots()
 
-SLOT_NAMES = _slot_names()
-
-
-def base_family_of(slot_name):
-    """'fabric_lime' -> 'fabric': a slot name minus its dye suffix.
-
-    Only the atlas UV path needs this -- a variant shares its base family's
-    cell, because the atlas has no per-variant cell and, in block-UV mode, what
-    gets sampled is the per-family texture anyway.
-    """
-    if slot_name in ATLAS_FAMILIES:
-        return slot_name
-    from block_families import DYE_COLOURS as _DYES
-    for c in _DYES:
-        suffix = "_" + c
-        if slot_name.endswith(suffix):
-            head = slot_name[:-len(suffix)]
-            if head in ATLAS_FAMILIES:
-                return head
-    return slot_name
 
 #: Detail kinds, by block-name substring. The kind only decides which library
 #: mesh a detail component lands in; every kind is meshed identically, as the
@@ -162,39 +138,43 @@ MC_TO_UE_HANDEDNESS = hand_parity(list(MC_TO_UE))
 # --------------------------------------------------------------------------- #
 
 def build_material_volume(bin_path, cache_path):
-    """Voxel -> atlas family index + palette id, cached as one .npz.
+    """Voxel -> per-face texture slot + palette id, cached as one .npz.
 
     `rolevolume.npy` records what *role* a voxel plays, not what it *is*, and
-    greedy meshing merges only equal materials, so the family per voxel has to
+    greedy meshing merges only equal materials, so the material per voxel has to
     come from the save. Re-reading it is the honest source; the cache exists
     because this is a 20 s scan whose answer does not change.
 
     The cache stores the *inputs* that produced it, not just the arrays, and is
     rebuilt when they differ. Without that, changing a mapping rule silently
-    keeps serving the old answer: the water special case in `family_of` was
-    added, the cache was not invalidated, and the water layer kept coming out
-    textured with brick, rock and wood while every run reported success. The
+    keeps serving the old answer: the water special case in the old family
+    mapping was added, the cache was not invalidated, and the water layer kept
+    coming out textured with brick, rock and wood while every run reported
+    success. The
     failure is invisible precisely because the cache is doing its job.
 
-    Index 0 is reserved for "air / no face" so a face mask can use 0 as empty.
-    Family i is stored as i + 1.
+    THREE volumes, not one: Minecraft's manifest gives every block its own top,
+    side and bottom texture (grass is green on top and dirt with a fringe on the
+    side; a log's end grain is not its bark). One slot per voxel cannot express
+    that, and the omission is visible as flat green grass sides.
 
-    Returns (family uint8, name_id uint16, names list).
+    Index 0 is reserved for "air / no face" so a face mask can use 0 as empty.
+    Slot i is stored as i + 1.
+
+    Returns (top uint16, side uint16, bottom uint16, name_id uint16, names).
     """
     from voxelio import VoxelFile
 
-    fam_slot = {f: i + 1 for i, f in enumerate(SLOT_NAMES)}
     x0, x1, z0, z1 = CAMPUS
     W, D, H = x1 - x0 + 1, z1 - z0 + 1, MAX_Y
 
-    # Everything that changes the answer. atlas_families because it defines the
+    # Everything that changes the answer. slot_names because it defines the
     # index encoding; source_mtime because a re-extracted save is new data.
     try:
         src_stamp = int(os.path.getmtime(bin_path))
     except OSError:
         src_stamp = 0
-    stamp = {"atlas_families": list(ATLAS_FAMILIES),
-             "slot_names": list(SLOT_NAMES),
+    stamp = {"slot_names": list(SLOT_NAMES),
              "source_mtime": src_stamp,
              "campus": list(CAMPUS)}
 
@@ -202,13 +182,19 @@ def build_material_volume(bin_path, cache_path):
         try:
             z = np.load(cache_path, allow_pickle=False)
             if list(z["stamp"]) == [json.dumps(stamp, sort_keys=True)]:
-                return (z["family"], z["nameid"],
+                return (z["top"], z["side"], z["bottom"], z["nameid"],
                         [str(s) for s in z["names"]])
             print("material cache is stale (inputs changed); rebuilding")
         except Exception as exc:
             print("material cache unreadable (%s); rebuilding" % str(exc)[:80])
 
-    fam = np.zeros((W, H, D), dtype=np.uint8)
+    # uint16, not uint8: the slot table is one entry per original block texture
+    # (274 today). A byte holds 255, and the write that overflows raises only at
+    # the first block past the limit -- so the width is a correctness property,
+    # not a size optimisation.
+    top = np.zeros((W, H, D), dtype=np.uint16)
+    side = np.zeros((W, H, D), dtype=np.uint16)
+    bottom = np.zeros((W, H, D), dtype=np.uint16)
     nid = np.zeros((W, H, D), dtype=np.uint16)
     slot_of_palette = {}
     names = []
@@ -234,7 +220,7 @@ def build_material_volume(bin_path, cache_path):
                 # The name must be resolved on *every* chunk, not only the
                 # first time a palette index is seen. Assigning it only inside
                 # the "new index" branch leaves `nm` holding the previous
-                # iteration's value, so a voxel's name and its material family
+                # iteration's value, so a voxel's name and its material slot
                 # come from two different blocks: the water layer came out
                 # carrying brick, rock and wood while its name still read
                 # "minecraft:water". Nothing cross-checks the two, so it
@@ -246,36 +232,23 @@ def build_material_volume(bin_path, cache_path):
                     slot = len(names)
                     names.append(nm)
                     slot_of_palette[s] = slot
+                t_slot, s_slot, b_slot = slots_of(nm)
                 m = st == s
-                fam[ix[m], iy[m], iz[m]] = fam_slot[family_of(nm)]
+                top[ix[m], iy[m], iz[m]] = t_slot
+                side[ix[m], iy[m], iz[m]] = s_slot
+                bottom[ix[m], iy[m], iz[m]] = b_slot
                 nid[ix[m], iy[m], iz[m]] = slot
 
     names_arr = np.array([""] * len(names), dtype="U96")
     for slot, nm in enumerate(names):
         names_arr[slot] = nm
     os.makedirs(os.path.dirname(cache_path) or ".", exist_ok=True)
-    np.savez_compressed(cache_path, family=fam, nameid=nid, names=names_arr,
+    np.savez_compressed(cache_path, top=top, side=side, bottom=bottom,
+                        nameid=nid, names=names_arr,
                         stamp=np.array([json.dumps(stamp, sort_keys=True)]))
     print("material volume: %d block names, %.1fs"
           % (len(names), time.time() - t0))
-    return fam, nid, [str(s) for s in names_arr]
-
-
-def family_of(block_name):
-    """block name -> atlas family name. `water` gets its own cell.
-
-    `block_families.family()` sends water to "other", because no rule matches
-    it. That is right for a general mapping and wrong here: the S4 water layer
-    needs to be identifiable in the material list and swappable on its own.
-    """
-    n = block_name.split(":", 1)[-1]
-    if n in ("water", "flowing_water", "bubble_column"):
-        return "water"
-    # family_key, not family: the dyed blocks (lime_wool, pink_terracotta,
-    # white_concrete) are what give the sports field its colours, and under the
-    # base mapping they all collapse into fabric / brick / concrete.
-    from block_families import family_key
-    return family_key(n)
+    return top, side, bottom, nid, [str(s) for s in names_arr]
 
 
 # --------------------------------------------------------------------------- #
@@ -342,18 +315,25 @@ def _drop_last(axis, size, forward):
     return tuple(sl)
 
 
-def mesh_volume(solid, occupied, mat, cap, world_offset):
+def mesh_volume(solid, occupied, mats, cap, world_offset):
     """Greedy-mesh one object's voxels. -> (corners, uvs, normals, quads)
 
     ``solid``     this object's voxel mask (bool)
     ``occupied``  campus-wide occupancy, any role: the culling reference
-    ``mat``       atlas family index per voxel, 0 = air
+    ``mats``      (top, side, bottom) texture-slot volumes, 0 = air
     ``world_offset`` (x, z) block coordinate of ``solid``'s [0, 0]
 
     ``corners`` is (N, 3) in Unreal cm, ``uvs`` is (N, 2) in block units
-    (0..w, 0..h per quad, scaled into the atlas by the caller), ``quads`` is a
+    (0..w, 0..h per quad), ``quads`` is a
     list of (base_index, material_slot, width_blocks, height_blocks).
+
+    The three material volumes exist because Minecraft gives a block a
+    different texture per face: a grass block is green on top, dirt with a
+    fringe on the side and dirt underneath. Selecting the volume by face is
+    the whole point -- reading one volume for all six faces is what made every
+    grass side flat green.
     """
+    mat_top, mat_side, mat_bottom = mats
     ox, oz = world_offset
     corners, uvs, normals, quads = [], [], [], []
 
@@ -380,7 +360,16 @@ def mesh_volume(solid, occupied, mat, cap, world_offset):
             face = here & ~beyond
             if not face.any():
                 continue
-            mat_here = mat[_drop_last(d, n_d, sign > 0)]
+            # Minecraft's vertical axis is y == axis 1, so d == 1 is the pair of
+            # faces that want the TOP and BOTTOM textures; the other four are
+            # sides. The material must be read from the *same* voxels as
+            # `here` -- slicing it with `sign > 0` unconditionally picks the
+            # wrong voxel for a -d face.
+            if d == 1:
+                src = mat_top if sign > 0 else mat_bottom
+            else:
+                src = mat_side
+            mat_here = src[_drop_last(d, n_d, sign > 0)]
 
             # Reverse the corner order when the traversed plane's normal
             # disagrees with the face's outward normal.
@@ -453,40 +442,6 @@ def mesh_volume(solid, occupied, mat, cap, world_offset):
             quads)
 
 
-#: "atlas" maps each quad onto its family's atlas cell (the original model,
-#: which stretches one whole tile across every merged quad and therefore shows a
-#: flat average per block). "block" keeps the UVs in block units instead, so a
-#: normal wrapping texture tiles physically across the surface -- which is how
-#: the per-family materials now sample, and the only mode that produces texture
-#: detail at 1 m scale.
-UV_MODE = "atlas"
-
-
-def scale_uvs(uvs, quads, layout):
-    """Map block-space UVs into each material's atlas cell.
-
-    ``uvs`` arrive per quad in *blocks*: (0,0) (w,0) (w,h) (0,h). They are
-    normalised by the quad's own extent and then placed inside the material's
-    cell, so a quad is stretched onto that cell and never tiled across it.
-
-    The normalisation is the step that is easy to get wrong: multiplying the
-    block-space UV by the cell size instead of dividing by the extent puts the
-    UV at (w * cell_w), which for a 4-block quad is four cells away -- outside
-    the atlas entirely, sampling whatever family happens to be over there.
-    Nothing warns about it; the texture is simply wrong.
-    """
-    out = np.empty_like(uvs)
-    for i, (base, slot, w, h) in enumerate(quads):
-        u0, v0, u1, v1 = layout[base_family_of(SLOT_NAMES[slot - 1])]["uv"]
-        du, dv = u1 - u0, v1 - v0
-        inv_w = 1.0 / float(w) if w else 0.0
-        inv_h = 1.0 / float(h) if h else 0.0
-        for k in range(4):
-            tu, tv = uvs[base + k]
-            out[base + k] = (u0 + tu * inv_w * du, v0 + tv * inv_h * dv)
-    return out
-
-
 # --------------------------------------------------------------------------- #
 # OBJ writer
 # --------------------------------------------------------------------------- #
@@ -538,19 +493,17 @@ def subvol(mask, pad=1):
     return mask[sl], lo
 
 
-def emit(mask, fam_idx, occupied, layout, cap, out_dir, name, comments):
+def emit(mask, mats, occupied, cap, out_dir, name, comments):
     """Mesh ``mask`` and write one OBJ. -> stats dict or None."""
     sub, off = subvol(mask)
     if sub is None:
         return None
     sl = tuple(slice(o, o + n) for o, n in zip(off, sub.shape))
     corners, uvs, normals, quads = mesh_volume(
-        sub, occupied[sl], fam_idx[sl], cap, (CAMPUS[0] + off[0],
-                                              CAMPUS[2] + off[2]))
+        sub, occupied[sl], tuple(m[sl] for m in mats), cap,
+        (CAMPUS[0] + off[0], CAMPUS[2] + off[2]))
     if not quads:
         return None
-    if UV_MODE == "atlas":
-        uvs = scale_uvs(uvs, quads, layout)
     # else: keep block-space UVs (0..w, 0..h per quad) for a tiling sampler.
     path = os.path.join(out_dir, name + ".obj")
     write_obj(path, comments, corners, uvs, normals, quads)
@@ -581,9 +534,6 @@ def main():
     ap.add_argument("--out", default="out")
     ap.add_argument("--bin", default="voxel_data/full/overworld.bin")
     ap.add_argument("--material-cache", default="out/materials/voxelmat.npz")
-    ap.add_argument("--uv-mode", choices=("atlas", "block"), default="atlas",
-                    help="atlas = per-quad cell mapping (flat averages at 1 m); "
-                         "block = block-unit UVs for a tiling sampler")
     ap.add_argument("--max-quad", type=int, default=4,
                     help="max blocks per merged quad edge. Raise for fewer "
                          "triangles, lower for sharper facades. Bounds how far "
@@ -591,9 +541,6 @@ def main():
     ap.add_argument("--min-detail", type=int, default=1,
                     help="smallest detail component to list in the manifest")
     args = ap.parse_args()
-
-    global UV_MODE
-    UV_MODE = args.uv_mode
 
     t0 = time.time()
     x0, x1, z0, z1 = CAMPUS
@@ -611,9 +558,9 @@ def main():
                 seat[s["id"]] = s
 
     print("loading material volume ...")
-    fam_idx, name_id, names = build_material_volume(args.bin,
-                                                    args.material_cache)
-    layout = plan_layout(ATLAS_FAMILIES, **ATLAS_DEFAULTS)
+    mat_top, mat_side, mat_bottom, name_id, names = build_material_volume(
+        args.bin, args.material_cache)
+    mats = (mat_top, mat_side, mat_bottom)
     occupied = role != 0
 
     struct_dir = os.path.join(args.out, "structures")
@@ -622,7 +569,8 @@ def main():
 
     comment_common = [
         "greedy meshing per material, max_quad=%d blocks" % args.max_quad,
-        "atlas layout: out/atlas/manifest.json (tools/build_atlas.py)",
+        "materials: original 1.16.5 block textures, 1 repeat per block "
+        "(tools/block_textures.py)",
         "coords: MC (x,y,z) -> UE (x*100, z*100, y*100) cm, Z up",
     ]
 
@@ -637,7 +585,7 @@ def main():
             mask = in_obj & (role == role_id)
             if not mask.any():
                 continue
-            st = emit(mask, fam_idx, occupied, layout, args.max_quad,
+            st = emit(mask, mats, occupied, args.max_quad,
                       struct_dir, "bld_%03d_%s" % (oid, tag),
                       ["MC2UE5 S3 building_id=%d part=%s" % (oid, tag)]
                       + comment_common)
@@ -714,7 +662,7 @@ def main():
         if not sel.any():
             continue
         n = sum(1 for c in comps if c["kind"] == kind)
-        st = emit(sel, fam_idx, occupied, layout, args.max_quad, lib_dir,
+        st = emit(sel, mats, occupied, args.max_quad, lib_dir,
                   "detail_%s" % kind,
                   ["MC2UE5 S4 detail library: kind=%s components=%d"
                    % (kind, n),
@@ -757,7 +705,7 @@ def main():
                     "share_of_campus": round(
                         float(water.sum()) / float((role != 0).sum()), 9)}
     if water.any():
-        st = emit(water, fam_idx, occupied, layout, args.max_quad,
+        st = emit(water, mats, occupied, args.max_quad,
                   struct_dir, "water_layer",
                   ["MC2UE5 S4 water layer"] + comment_common)
         water_report.update({k: st[k] for k in
@@ -791,20 +739,13 @@ def main():
     all_quads = tot_quads + sum(v["quads"] for v in by_kind.values()) \
         + water_report.get("quads", 0)
 
-    # The UV convention is mode-dependent and must be recorded as such: a
-    # reader who assumes atlas semantics on a block-mode mesh would look for
-    # the atlas cell and find block counts instead, with nothing to warn them.
-    if UV_MODE == "block":
-        uv_convention = ("block-unit UVs, 1 texture repeat per block, "
-                         "sampler address mode = Wrap")
-        why_capped = ("greedy merging emits quads measured in blocks; the cap "
-                      "bounds how many blocks one quad spans so the per-block "
-                      "texture repeat stays uniform across the facade")
-    else:
-        uv_convention = ("each merged quad is stretched onto its material's "
-                         "atlas cell, never tiled across it")
-        why_capped = ("greedy merging alone stretches one atlas cell across a "
-                      "whole facade; the cap bounds texel density")
+    # Block-unit UVs, so one merged quad is one texture repeat per block and a
+    # cap only bounds how coarsely a facade may be merged.
+    uv_convention = ("block-unit UVs, 1 texture repeat per block, "
+                     "sampler address mode = Wrap")
+    why_capped = ("greedy merging emits quads measured in blocks; the cap "
+                  "bounds how many blocks one quad spans so the per-block "
+                  "texture repeat stays uniform across the facade")
 
     manifest = {
         "step": "S3+S4",
@@ -817,17 +758,17 @@ def main():
             "face_culling": "a face is emitted only where the neighbouring "
                             "voxel is empty in ANY role, campus-wide",
             "max_quad_blocks": args.max_quad,
-            "uv_mode": UV_MODE,
+            "uv_convention_kind": "block",
             "why_capped": why_capped,
             "uv_convention": uv_convention,
             "winding": "right-hand rule around the outward normal, parity "
                        "derived per axis rather than hardcoded",
         },
-        "atlas": {
-            "planned_by": "tools/build_atlas.py plan_layout()",
-            "families": ATLAS_FAMILIES,
-            "tile_px": ATLAS_DEFAULTS["tile"],
-            "manifest": "out/atlas/manifest.json",
+        "materials": {
+            "source": "original Minecraft 1.16.5 block textures",
+            "table": "out/textures/slots.json (tools/block_textures.py)",
+            "slots": len(SLOT_NAMES),
+            "per_face": "top / side / bottom are separate slots",
         },
         "blocks": {
             "labelled_total": labelled,

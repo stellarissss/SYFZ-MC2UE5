@@ -81,7 +81,10 @@ def main():
         print("missing %s -- run tools/classify.py first" % role_path)
         return 1
     role = np.load(role_path)
-    fam, _nid, _names = build_material_volume(args.bin, args.material_cache)
+    mat_top, mat_side, mat_bottom, _nid, _names = build_material_volume(
+        args.bin, args.material_cache)
+    mats = (mat_top, mat_side, mat_bottom)
+    fam = mat_top
     if role.shape != fam.shape:
         print("role %s != fam %s -- both must be the campus grid"
               % (role.shape, fam.shape))
@@ -100,9 +103,8 @@ def main():
         if 1 <= v <= len(SLOT_NAMES):
             per_family[SLOT_NAMES[v - 1]] = int(c)
 
-    # Block-unit UVs, like the structures' --uv-mode block: the per-family
-    # tiling M_MC_* samplers need one repeat per block, not an atlas cell.
-    es.UV_MODE = "block"
+    # UVs are block-unit by construction now: one texture repeat per block, the
+    # only convention the per-texture materials sample.
 
     W = role.shape[0]
     chunks = []
@@ -114,7 +116,7 @@ def main():
         if not m.any():
             continue
         name = "veg_x%04d" % (CAMPUS[0] + x_lo)
-        st = es.emit(m, fam, occupied, None, args.max_quad,
+        st = es.emit(m, mats, occupied, args.max_quad,
                      args.out, name, [
                          "S4.5 vegetation chunk %s" % name,
                          "strip x[%d, %d) of %d, max_quad %d"

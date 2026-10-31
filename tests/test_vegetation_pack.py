@@ -30,8 +30,12 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import extract_structures as es                     # noqa: E402
 from extract_structures import CAMPUS, SLOT_NAMES   # noqa: E402
 
-LEAVES = SLOT_NAMES.index("leaves") + 1
-BARK = SLOT_NAMES.index("bark") + 1
+# Two distinct texture slots stand in for a canopy and its trunk. They are
+# slot names, not families: the material table is keyed on the original block
+# textures now, so "oak_leaves" and "oak_log" are what a mesh can be tagged
+# with (tools/block_textures.py).
+LEAVES = SLOT_NAMES.index("oak_leaves") + 1
+BARK = SLOT_NAMES.index("oak_log") + 1
 X0 = CAMPUS[0]
 Z0 = CAMPUS[2]
 
@@ -89,9 +93,10 @@ def main():
     fam[2, 0, 2] = BARK
     occupied = mask.copy()
 
-    es.UV_MODE = "block"
     out_dir = tempfile.mkdtemp(prefix="mc2ue5_vegtest_")
-    st = es.emit(mask, fam, occupied, None, 4, out_dir, "vegtest", [
+    # The same volume on all three faces: this synthetic scene has one slot per
+    # block, so nothing here depends on the top/side/bottom split.
+    st = es.emit(mask, (fam, fam, fam), occupied, 4, out_dir, "vegtest", [
         "synthetic vegetation test"])
 
     check(st is not None, "emit produced a chunk")
@@ -116,7 +121,7 @@ def main():
           "%d (want %d)" % (len(faces), want_quads * 2))
     check(len(verts) == want_quads * 4, "vertex count", len(verts))
     check(st["triangles"] == len(faces), "manifest agrees with the file")
-    check(st["material_slots"] == sorted(["bark", "leaves"]),
+    check(st["material_slots"] == sorted(["oak_log", "oak_leaves"]),
           "manifest material slots", st["material_slots"])
 
     # -- flat normals + front-face winding (OBJ space, right-handed) --------
@@ -180,10 +185,10 @@ def main():
         if m not in seen:
             seen.add(m)
             groups.append(m)
-    check(sorted(seen) == ["bark", "leaves"], "usemtl families present",
+    check(sorted(seen) == ["oak_leaves", "oak_log"], "usemtl slots present",
           sorted(seen))
-    leaf_faces = sum(1 for (_i, m) in faces if m == "leaves")
-    bark_faces = sum(1 for (_i, m) in faces if m == "bark")
+    leaf_faces = sum(1 for (_i, m) in faces if m == "oak_leaves")
+    bark_faces = sum(1 for (_i, m) in faces if m == "oak_log")
     check(leaf_faces == 18, "leaf faces", leaf_faces)
     check(bark_faces == 8, "bark faces", bark_faces)
 

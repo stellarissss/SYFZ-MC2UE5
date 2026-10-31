@@ -113,14 +113,14 @@ G:\BaiduNetdiskDownload\real\venv\Scripts\python.exe tools\build_world.py
 | # | 阶段 | 脚本 | 产物 |
 |---|---|---|---|
 | 1 | data | classify.py（仅当 out/classify 缺失） | rolevolume/terrain.npy |
-| 2 | data | extract_structures.py --uv-mode block | 结构 OBJ（含变体+玻璃族） |
+| 2 | data | extract_structures.py | 结构 OBJ（按面选槽：top/side/bottom 三个材质体积） |
 | 3 | data | pack_terrain_tiles.py | out/terrain_pack（24 瓦片） |
 | 4 | data | build_vegetation_pack.py | out/vegetation_obj（S4.5 树） |
 | 5 | data | pick_spawn.py | logs/spawn.json |
-| 6 | editor | import_family_materials --stage materials | T_/M_MC_* 材质 |
+| 6 | editor | import_block_textures.py --stage materials | T_/M_MC_*（274 个原版贴图槽） |
 | 7 | editor | build_terrain_meshes.py | 24 瓦片 + **碰撞**（本轮新增） |
 | 8 | editor | build_vegetation_meshes.py | 植被网格+actor（本轮新增） |
-| 9 | editor | import_family_materials --stage meshes | 结构重导入+槽位绑定 |
+| 9 | editor | import_block_textures.py --stage meshes | 结构重导入+槽位绑定 |
 | 10 | editor | ensure_lighting.py | 统一灯光（与 ApplyLook 同值） |
 | 11 | editor | apply_spawn.py | 出生点（Y 已镜像到正确半球） |
 | 12 | editor | hide_voxel_layer.py | 藏体素层+**碰撞退役**（门控） |

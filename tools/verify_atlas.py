@@ -32,6 +32,24 @@ from block_families import FAMILIES                        # noqa: E402
 from build_atlas import (ATLAS_FAMILIES, EXPECTED_MEAN,      # noqa: E402
                          GENERATED_RGB, plan_layout)
 
+# RETIRED (2026-10-30). This checker validates the 19-family photo ATLAS, which
+# no longer drives anything: the material path is now the 274-slot vanilla
+# texture table in `tools/block_textures.py`. The photo families had to go
+# because they collapsed 315 blocks / 273 textures onto 19 tiles -- cobblestone,
+# stone_bricks, end_stone_bricks and smooth_stone all shared one greystone
+# photo (see docs/colour_truth.md).
+#
+# Left in place rather than deleted because docs/qa_s5_report.md cites its
+# output, but it must never be run and reported as a pass: it would validate a
+# deleted artefact and still print PASS.
+raise SystemExit(
+    "verify_atlas.py is RETIRED: it validates the 19-family photo atlas, which "
+    "the pipeline no longer uses.\n"
+    "Current texture checks:  python tools/block_textures.py   (274 slots, "
+    "coverage + per-tile report)\n"
+    "                         python tools/test_extract_structures.py\n"
+    "See docs/colour_truth.md.")
+
 #: Expected mean RGB per family, imported from build_atlas.py rather than
 #: copied. A second literal here would be a second thing to forget to update,
 #: and a stale copy asserts nothing useful -- it would fail on a correct

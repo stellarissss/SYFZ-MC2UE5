@@ -16,7 +16,7 @@ Per tile, under out/terrain_pack/:
     <name>.pos   float32  (nv, 3)  vertex positions, ALREADY in Unreal cm
     <name>.uv    float32  (nv, 2)  vertex UVs
     <name>.tri   int32    (nt, 3)  triangle -> vertex indices, 0-based
-    <name>.fam   uint8    (nt,)    1-based family slot per triangle
+    <name>.fam   uint16   (nt,)    1-based texture slot per triangle
     manifest.json                  tiles, family names, material paths
 
 Positions are written the way the mesh builder needs them, which is the way the
@@ -40,14 +40,13 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from build_atlas import ATLAS_FAMILIES                          # noqa: E402
 from extract_structures import SLOT_NAMES                      # noqa: E402
 from terrain_smooth import (CAMPUS, BLOCK_CM, fill_invalid,     # noqa: E402
                             smooth_heightfield, surface_family_map)
 from extract_structures import build_material_volume            # noqa: E402
 
 PACK_DIR = "out/terrain_pack"
-MAT_FMT = "/Game/MC/Families/M_MC_%s"
+MAT_FMT = "/Game/MC/Textures/M_MC_%s"
 MESH_DIR = "/Game/MC/Terrain"
 
 
@@ -70,16 +69,17 @@ def main():
     before = h.astype(np.float32)
 
     print("loading material volume for surface families ...")
-    fam_vol, _nameid, _names = build_material_volume(args.bin,
-                                                     args.material_cache)
+    # Top faces only: the terrain is a single-layer height field, so the slot
+    # that matters is the one the block shows upwards (grass on a lawn, quartz
+    # on a podium) -- not its side or bottom.
+    fam_vol = build_material_volume(args.bin, args.material_cache)[0]
     fam_map = surface_family_map(h, fam_vol)
 
     sm, shift = smooth_heightfield(before, args.sigma, args.flat_restore)
     sm = sm.astype(np.float32)
     print("smoothing: mean |dh| = %.3f m" % shift)
-    print("surface families: %d distinct; other = %d columns"
-          % (int(np.unique(fam_map).size),
-             int((fam_map == ATLAS_FAMILIES.index("other") + 1).sum())))
+    print("surface textures: %d distinct; unresolved = %d columns"
+          % (int(np.unique(fam_map).size), int((fam_map == 1).sum())))
 
     nu, nv = sm.shape
     x0, z0 = CAMPUS[0], CAMPUS[2]
@@ -144,7 +144,7 @@ def main():
             tri = np.empty((2 * a.size, 3), dtype=np.int32)
             tri[0::2, 0], tri[0::2, 1], tri[0::2, 2] = a, b, c
             tri[1::2, 0], tri[1::2, 1], tri[1::2, 2] = a, c, dd
-            facefam = np.repeat(fam[:w - 1, :d - 1].ravel(), 2).astype(np.uint8)
+            facefam = np.repeat(fam[:w - 1, :d - 1].ravel(), 2).astype(np.uint16)
 
             # ---- seam strips (audit F1) ---------------------------------
             # facefam drops every tile's last cell row/column, so between two
@@ -207,7 +207,7 @@ def main():
                              dtype=np.int32)
                 qfam = np.array([_f for (_a, _b, _c, _dd, _f) in quads]
                                 + [_f for (_a, _b, _c, _dd, _f) in quads],
-                                dtype=np.uint8)
+                                dtype=np.uint16)
                 tri = np.concatenate([tri, q])
                 facefam = np.concatenate([facefam, qfam])
 

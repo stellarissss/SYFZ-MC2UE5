@@ -38,20 +38,15 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from build_atlas import ATLAS_FAMILIES                          # noqa: E402
 
 CAMPUS = (-144, 303, -544, 223)
 BLOCK_CM = 100.0
 
-#: 1-based family slot per name, matching build_material_volume's encoding
-#: (``fam_slot = {f: i+1 ...}``, 0 = air). Imported rather than rebuilt here:
-#: the slot number is the contract between the voxel volume, this file's
-#: `usemtl` lines and extract_structures' OBJ writer, so two independent copies
-#: of the table would be able to drift and mislabel surfaces without error.
-#: It covers the colour variants too (fabric_lime, brick_pink, ...), which is
-#: how the sports field gets its colours -- the field surface belongs to the
-#: terrain, not to any building mesh, so a variant that never appears in the
-#: structure OBJs is not missing, it is here.
+#: 1-based texture slot per name, matching build_material_volume's encoding
+#: (0 = air, 1 = the neutral fallback). Imported rather than rebuilt here: the
+#: slot number is the contract between the voxel volume, this file's `usemtl`
+#: lines and extract_structures' OBJ writer, so two independent copies of the
+#: table would be able to drift and mislabel surfaces without error.
 from extract_structures import SLOT_NAMES                     # noqa: E402
 
 FAMILY_SLOT = {f: i + 1 for i, f in enumerate(SLOT_NAMES)}
@@ -102,7 +97,7 @@ def smooth_heightfield(h, sigma, flat_restore):
 
 
 def surface_family_map(h, fam_vol, max_down=3):
-    """-> (nu, nv) uint8 of the 1-based surface family slot per terrain column.
+    """-> (nu, nv) uint16 of the 1-based surface texture slot per column.
 
     ``h`` is the classified height field (out/classify/terrain.npy) and
     ``fam_vol`` the voxel->family volume from build_material_volume, both in
@@ -121,7 +116,7 @@ def surface_family_map(h, fam_vol, max_down=3):
     ii, jj = np.meshgrid(np.arange(nu), np.arange(nv), indexing="ij")
 
     resolved = np.zeros((nu, nv), bool)
-    out = np.full((nu, nv), OTHER_SLOT, dtype=np.uint8)
+    out = np.full((nu, nv), OTHER_SLOT, dtype=np.uint16)
     for di in range(max_down + 1):
         lvl = yy - di
         in_range = (lvl >= 0) & (lvl < ny)
@@ -275,8 +270,7 @@ def main():
     # this does not re-read the multi-GB save.
     from extract_structures import build_material_volume
     print("loading material volume for surface families ...")
-    fam_vol, _nameid, _names = build_material_volume(args.bin,
-                                                     args.material_cache)
+    fam_vol = build_material_volume(args.bin, args.material_cache)[0]
     fam_map = surface_family_map(h, fam_vol)
     print("surface families: %d distinct, other=%d columns"
           % (int(np.unique(fam_map).size), int((fam_map == OTHER_SLOT).sum())))

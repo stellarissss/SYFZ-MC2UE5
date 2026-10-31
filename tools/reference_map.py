@@ -21,9 +21,16 @@ canonical Minecraft colour of the topmost non-empty block. It is both
   2. the **target colour reference** for the S5.5 colour-variant work, so the
      ΔE comparison is numeric instead of eyeballed.
 
-Material classification is derived from `block_families.py` (the single
-authoritative mapping). Only the *colour* table below is new, and it is
-deliberately explicit and commented so it can be audited.
+The block name of each column's top voxel comes from the material cache
+(`out/materials/voxelmat.npz`, written by `extract_structures.py`), which now
+stores three per-face texture slots (top / side / bottom, 1-based, 0 = air)
+instead of the old single 19-family code. This map only needs the vertical
+face, so it reads `top`. Colours are resolved from the block NAME, not from the
+slot: one slot (e.g. `quartz_block_top`) covers many block names, and the
+colour table below is per name. Only the *colour* table is new, and it is
+deliberately explicit and commented so it can be audited. The last-resort
+fallback in `block_rgb` still asks `block_families.family()`, which is retained
+and still imports cleanly.
 
 Outputs (all under out/):
   ref_map.png        448x768, 1 block = 1 px, no legend   (the measured ruler)
@@ -292,17 +299,23 @@ def top_block_per_column():
 
     The algorithm is `classify.py`'s: walk y from 0 up and keep the last
     non-empty voxel, i.e. each column's topmost solid block. Solid is
-    ``family != 0`` in the material cache because family slot 0 is reserved
-    for air (real families are 1..N), which is the same "not EMPTY" test
-    classify uses. Reading the cache avoids re-scanning the multi-GB save.
+    ``top_slot != 0`` in the material cache because slot 0 is reserved for air
+    (real slots are 1..274), which is the same "not EMPTY" test classify uses.
+    Reading the cache avoids re-scanning the multi-GB save.
+
+    The cache stores three per-face slots (top / side / bottom). The top-down
+    view is about the block's vertical face, so `top` is the volume that
+    answers "is there a block here"; side/bottom are equal to it wherever the
+    voxel exists and 0 where it does not, so any of the three would give the
+    same mask.
     """
     z = np.load(MATERIAL_CACHE, allow_pickle=False)
-    fam, nid = z["family"], z["nameid"]
-    W, H, D = fam.shape
+    top_vol, nid = z["top"], z["nameid"]
+    W, H, D = top_vol.shape
     top = np.zeros((W, D), dtype=nid.dtype)
     has = np.zeros((W, D), bool)
     for y in range(H):
-        here = fam[:, y, :] != 0
+        here = top_vol[:, y, :] != 0
         top = np.where(here, nid[:, y, :], top)
         has |= here
     return top, has

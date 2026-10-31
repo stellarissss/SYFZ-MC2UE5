@@ -42,8 +42,10 @@ OUT = os.path.join(
                    os.path.join(os.path.dirname(_repo), "logs")),
     "build_vegetation_meshes.txt")
 
-# The structure chain's proven import helpers (imports unreal itself).
-from import_family_materials import (                      # noqa: E402
+# The proven import helpers, from the block-texture importer: the bindings must
+# resolve M_MC_<texture> under /Game/MC/Textures, which is where the slot table
+# puts them (the old family module looked under /Game/MC/Families).
+from import_block_textures import (                        # noqa: E402
     import_obj, usemtl_first_seen_order, bind_slots)
 
 MAP = "/Game/Maps/MCReplica"

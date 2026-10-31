@@ -15,17 +15,19 @@ It runs, in order:
 
   data side (this python, needs numpy -- use the venv):
     1. classify.py                     (only if out/classify is missing)
-    2. extract_structures.py           (--uv-mode block: variants + glass slots)
+    2. extract_structures.py           (per-face slots from the original
+                                        block textures, block-unit UVs)
     3. pack_terrain_tiles.py           (24-tile terrain pack)
     4. build_vegetation_pack.py        (S4.5: the trees, packed)
     5. pick_spawn.py                   (searched spawn -> logs/spawn.json)
 
   editor side (UnrealEditor-Cmd -nullrhi, one process per step, because the
   async mesh builds crash when too many tiles are built in one session):
-    6. import_family_materials --stage materials   (T_MC + M_MC for new slots)
+    6. import_block_textures --stage materials     (T_MC + M_MC per original
+                                                    block texture, TF_NEAREST)
     7. build_terrain_meshes.py                     (assets + NORMALS + COLLISION)
     8. build_vegetation_meshes.py                  (assets + actors)
-    9. import_family_materials --stage meshes      (structure OBJs + slot bind)
+    9. import_block_textures --stage meshes        (structure OBJs + slot bind)
    10. ensure_lighting.py                          (sun/sky, ApplyLook values)
    11. apply_spawn.py                              (PlayerStart <- spawn.json)
    12. hide_voxel_layer.py                         (visibility + collision off,
@@ -174,6 +176,23 @@ def classify_needed():
     return not (os.path.isfile(role) and os.path.isfile(terrain))
 
 
+#: The editor stages, in build order, as (name, script, env).
+#:
+#: Single source of truth for both the full build and `--only`: a second copy
+#: drifts, and a drifted copy rebuilds the level from the wrong assets while
+#: still reporting PASS.
+EDITOR_STEPS = (
+    ("materials", "tools/import_block_textures.py", {"MC_STAGE": "materials"}),
+    ("terrain", "tools/build_terrain_meshes.py", {}),
+    ("vegetation", "project/Content/Python/build_vegetation_meshes.py", {}),
+    ("meshes", "tools/import_block_textures.py", {"MC_STAGE": "meshes"}),
+    ("lighting", "tools/ensure_lighting.py", {}),
+    ("spawn", "project/Content/Python/apply_spawn.py", {}),
+    ("hide", "tools/hide_voxel_layer.py", {}),
+    ("census", "project/Content/Python/level_census.py", {}),
+)
+
+
 def main():
     global EDITOR
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
@@ -181,9 +200,8 @@ def main():
     ap.add_argument("--skip-data", action="store_true",
                     help="skip the host-python data stages (packs exist)")
     ap.add_argument("--only", default=None,
-                    help="run ONE editor step by short name "
-                         "(materials|terrain|vegetation|meshes|lighting|spawn|"
-                         "hide|census)")
+                    help="run ONE editor step by short name (%s)"
+                         % "|".join(n for n, _, _ in EDITOR_STEPS))
     ap.add_argument("--bin", default="voxel_data/full/overworld.bin")
     args = ap.parse_args()
     EDITOR = args.engine
@@ -194,19 +212,7 @@ def main():
     _say("=" * 74)
 
     if args.only:
-        table = {
-            "materials": ("tools/import_family_materials.py",
-                          {"MC_STAGE": "materials"}),
-            "terrain": ("tools/build_terrain_meshes.py", {}),
-            "vegetation": ("project/Content/Python/build_vegetation_meshes.py",
-                           {}),
-            "meshes": ("tools/import_family_materials.py",
-                       {"MC_STAGE": "meshes"}),
-            "lighting": ("tools/ensure_lighting.py", {}),
-            "spawn": ("project/Content/Python/apply_spawn.py", {}),
-            "hide": ("tools/hide_voxel_layer.py", {}),
-            "census": ("project/Content/Python/level_census.py", {}),
-        }
+        table = {name: (script, env) for name, script, env in EDITOR_STEPS}
         if args.only not in table:
             _say("*** unknown step %r; known: %s" % (args.only,
                                                      ", ".join(table)))
@@ -223,8 +229,7 @@ def main():
         else:
             _say("[data] classify                     (out/classify exists, skip)")
         run_host("extract_structures",
-                 ["tools/extract_structures.py", "--uv-mode", "block",
-                  "--bin", args.bin])
+                 ["tools/extract_structures.py", "--bin", args.bin])
         run_host("pack_terrain_tiles",
                  ["tools/pack_terrain_tiles.py", "--bin", args.bin,
                   "--terrain", "out/classify/terrain.npy"])
@@ -236,16 +241,8 @@ def main():
     else:
         _say("[data] skipped (--skip-data)")
 
-    run_editor("materials", "tools/import_family_materials.py",
-               {"MC_STAGE": "materials"})
-    run_editor("terrain", "tools/build_terrain_meshes.py")
-    run_editor("vegetation", "project/Content/Python/build_vegetation_meshes.py")
-    run_editor("meshes", "tools/import_family_materials.py",
-               {"MC_STAGE": "meshes"})
-    run_editor("lighting", "tools/ensure_lighting.py")
-    run_editor("spawn", "project/Content/Python/apply_spawn.py")
-    run_editor("hide", "tools/hide_voxel_layer.py")
-    run_editor("census", "project/Content/Python/level_census.py")
+    for name, script, env in EDITOR_STEPS:
+        run_editor(name, script, env)
 
     _say("")
     _say("=" * 74)

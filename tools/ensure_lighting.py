@@ -35,6 +35,7 @@ Run:
 
 import os
 import sys
+import time
 
 import unreal
 
@@ -46,6 +47,11 @@ OUT = os.path.join(os.environ.get(
         os.path.abspath(__file__))), "..", "logs")),
     "ensure_lighting.txt")
 _lines = []
+
+#: Light values whose write failed. Each is a look decision the spec asks for
+#: (sun lux, colour, temperature, skylight capture, no shadow pass), so a failure
+#: fails the step rather than leaving the value silently unset.
+_FAILED = []
 
 
 def say(msg):
@@ -63,6 +69,61 @@ def find_existing(world, cls, label):
         if actor.get_actor_label() == label:
             return actor
     return None
+
+
+#: Light values live on the light COMPONENT, not on the actor; writing one on the
+#: actor raises "Failed to find property".
+#:
+#: Candidate lists exist because a UPROPERTY's Python name is not always the
+#: guessable one: `bUseTemperature` is `use_temperature`, and some values are only
+#: exposed as a UFUNCTION. Trying several and reporting which one took keeps the
+#: log honest about what actually landed.
+LIGHT_PROPS = {
+    "intensity":         ("intensity",),
+    "light_color":       ("light_color",),
+    "temperature":       ("temperature",),
+    "use_temperature":   ("use_temperature", "temperature_enabled",
+                          "bUseTemperature"),
+    "cast_shadows":      ("cast_shadows", "bCastShadows"),
+    "real_time_capture": ("real_time_capture", "bRealTimeCapture"),
+}
+
+
+def set_on_component(actor, comp_cls, key, value):
+    """Write one light value on the actor's light component.
+
+    UFUNCTION first, UPROPERTY second: light colour is only exposed as
+    ``SetLightColor(FLinearColor)``, while the property behind it is an
+    ``FColor`` and rejects a ``LinearColor``.
+
+    Returns True if it landed; a failure is recorded in ``_FAILED`` so the step
+    cannot report PASS with a value silently missing.
+    """
+    comp = actor.get_component_by_class(comp_cls)
+    if comp is None:
+        say("FAIL %s: actor has no %s" % (key, comp_cls))
+        return False
+    fn = getattr(comp, "set_" + key, None)
+    if callable(fn):
+        for args in ((value,), (value, False)):
+            try:
+                fn(*args)
+                say("%s = %r (via set_%s, %d arg)"
+                    % (key, value, key, len(args)))
+                return True
+            except Exception:
+                continue
+    for name in LIGHT_PROPS[key]:
+        try:
+            comp.set_editor_property(name, value)
+            say("%s = %r (via %s)" % (key, value, name))
+            return True
+        except Exception:
+            continue
+    _FAILED.append(key)
+    say("FAIL %s: none of %s accepted, and set_%s did not take"
+        % (key, ", ".join(LIGHT_PROPS[key]), key))
+    return False
 
 
 def make_sun(world):
@@ -94,43 +155,44 @@ def make_sun(world):
         # viewport and the cooked build agreeing -- before this, the level was
         # authored at 4.0/(-58,0,34) and silently overwritten to 10/(-48,-135,0)
         # a second after every launch, two sources of truth fighting.
-        light.set_editor_property("intensity", 10.0)
-        light.set_editor_property("light_color", unreal.LinearColor(1.0, 0.96, 0.90))
-        light.set_editor_property("temperature_enabled", True)
-        light.set_editor_property("temperature", 5600.0)
-        light.set_actor_rotation(unreal.Rotator(-48.0, -135.0, 0.0, "XYZ"))
+        #
+        # Only ACTOR properties here; every light value goes on the component
+        # (see set_on_component).
+        light.set_actor_rotation(unreal.Rotator(-48.0, -135.0, 0.0), False)
         light.set_actor_location(unreal.Vector(0.0, 0.0, 40000.0), False, False)
         light.set_actor_label("MC_Sun")
         unreal.EditorLevelLibrary.add_actor_to_level(light) \
                 if hasattr(unreal.EditorLevelLibrary, "add_actor_to_level") \
                 else light.set_editor_property("folder_path", unreal.Name("/Game/MC"))
 
-        # cast_shadows lives on the light COMPONENT, not on the actor. Setting it on
-        # the actor raises "Failed to find property", which is how the first attempt
-        # at this silently did nothing.
-        comp = light.get_component_by_class(unreal.DirectionalLightComponent)
-        if comp:
-                comp.set_editor_property("cast_shadows", False)
+        comp = unreal.DirectionalLightComponent
+        set_on_component(light, comp, "intensity", 10.0)
+        set_on_component(light, comp, "light_color",
+                         unreal.LinearColor(1.0, 0.96, 0.90))
+        set_on_component(light, comp, "use_temperature", True)
+        set_on_component(light, comp, "temperature", 5600.0)
+        set_on_component(light, comp, "cast_shadows", False)
 
-        say("sun created: intensity=10.0 rot=(-48,-135,0) "
-                "cast_shadows=%s" % (comp.get_editor_property("cast_shadows")
-                                                         if comp else "NO-COMPONENT"))
+        say("sun created: rot=(-48,-135,0); values written to the component")
         return light
 
 
 def make_skylight(world):
     """A skylight so shadowed faces get sky bounce instead of going black."""
     light = unreal.SkyLight()
-    light.set_editor_property("intensity", 1.0)
-    light.set_editor_property("light_color", unreal.LinearColor(0.62, 0.72, 0.90))
-    light.set_editor_property("real_time_capture", True)
-    light.set_actor_rotation(unreal.Rotator(-38.0, 0.0, 0.0, "XYZ"))
-    light.set_actor_location(unreal.Vector(0.0, 0.0, 60000.0))
+    light.set_actor_rotation(unreal.Rotator(-38.0, 0.0, 0.0), False)
+    light.set_actor_location(unreal.Vector(0.0, 0.0, 60000.0), False, False)
     light.set_actor_label("MC_SkyLight")
     unreal.EditorLevelLibrary.add_actor_to_level(light) \
         if hasattr(unreal.EditorLevelLibrary, "add_actor_to_level") \
         else light.set_editor_property("folder_path", unreal.Name("/Game/MC"))
-    say("skylight created: intensity=1.0 real_time_capture=True")
+    comp = unreal.SkyLightComponent
+    set_on_component(light, comp, "intensity", 1.0)
+    set_on_component(light, comp, "light_color",
+                     unreal.LinearColor(0.62, 0.72, 0.90))
+    set_on_component(light, comp, "real_time_capture", True)
+    say("skylight created: rotation/location set; values written to the "
+        "component")
     return light
 
 
@@ -175,6 +237,9 @@ def mute_legacy_clusters(world):
 
 
 def main():
+        # First line, so a crash cannot be mistaken for a clean pass from a
+        # previous run's log.
+        say("=== ensure_lighting start %s ===" % time.strftime("%F %T"))
         subsystems = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
         world = subsystems.get_editor_world() if subsystems else None
         if world is None:
@@ -192,25 +257,29 @@ def main():
         if sun is None:
                 make_sun(world)
         else:
-                # Re-author the values even when the sun exists: the level
-                # currently carries the stale 4.0 / (-58,0,34) set from before
-                # the values were unified with ApplyLook. "Left alone" here
-                # meant one more run would silently keep the mismatch.
-                sun.set_editor_property("intensity", 10.0)
-                sun.set_editor_property("temperature_enabled", True)
-                sun.set_editor_property("temperature", 5600.0)
+                # Re-author the values even when the sun exists, so the level
+                # cannot keep an older set: AMCFrameCaptureGameMode::ApplyLook
+                # forces SunLux=10 / (-48,-135,0) at runtime, and the editor copy
+                # has to agree with it.
+                dirlight = unreal.DirectionalLightComponent
                 sun.set_actor_rotation(
-                        unreal.Rotator(-48.0, -135.0, 0.0, "XYZ"))
-                comp = sun.get_component_by_class(
-                        unreal.DirectionalLightComponent)
-                if comp:
-                        comp.set_editor_property("cast_shadows", False)
+                        unreal.Rotator(-48.0, -135.0, 0.0), False)
+                set_on_component(sun, dirlight, "intensity", 10.0)
+                set_on_component(sun, dirlight, "light_color",
+                                 unreal.LinearColor(1.0, 0.96, 0.90))
+                set_on_component(sun, dirlight, "use_temperature", True)
+                set_on_component(sun, dirlight, "temperature", 5600.0)
+                set_on_component(sun, dirlight, "cast_shadows", False)
                 say("sun already present: re-authored to 10.0 / (-48,-135,0)")
         if skylight is None:
                 make_skylight(world)
         else:
-                skylight.set_editor_property("real_time_capture", True)
-                say("skylight already present: real_time_capture re-asserted")
+                skycomp = unreal.SkyLightComponent
+                set_on_component(skylight, skycomp, "intensity", 1.0)
+                set_on_component(skylight, skycomp, "light_color",
+                                 unreal.LinearColor(0.62, 0.72, 0.90))
+                set_on_component(skylight, skycomp, "real_time_capture", True)
+                say("skylight already present: values re-asserted on the component")
 
         mute_legacy_clusters(world)
 
@@ -227,11 +296,43 @@ def main():
                 say("RESULT: FAIL no DirectionalLight after the fix")
                 return 1
 
+        if _FAILED:
+                say("FAIL: %d light value(s) never landed: %s"
+                    % (len(_FAILED), ", ".join(sorted(set(_FAILED)))))
+                say("RESULT: FAIL light values not applied")
+                return 1
+
+        # Read the values back. Counting actors is not a check: the component must
+        # report 10.0 lux or the step has not done its job.
+        sun_comp = suns[0].get_component_by_class(unreal.DirectionalLightComponent)
+        got = None
+        if sun_comp is not None:
+                try:
+                        got = float(sun_comp.get_editor_property("intensity"))
+                except Exception:
+                        got = None
+        if got is None or abs(got - 10.0) > 1e-3:
+                say("FAIL: sun intensity reads %r, expected 10.0" % (got,))
+                say("RESULT: FAIL sun intensity not applied")
+                return 1
+        say("verified: sun intensity = %.3f lux on the component" % got)
+
         unreal.EditorLevelLibrary.save_current_level()
         say("level saved")
-        say("RESULT: PASS sun=%d skylight=%d" % (len(suns), len(skies)))
+        say("RESULT: PASS sun=%d skylight=%d sun_lux=%.2f"
+                % (len(suns), len(skies), got))
         return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Always leave a RESULT line, including on an uncaught exception, so callers
+    # that grep for it can tell failure from a missing log.
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        say(traceback.format_exc())
+        say("RESULT: FAIL uncaught exception")
+        raise
