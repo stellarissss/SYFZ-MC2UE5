@@ -530,20 +530,22 @@ def main():
             % (col, row, CAMPUS[0] + col, CAMPUS[2] + row,
                fr[0], fr[1], fr[2], rr[0], rr[1], rr[2], why))
 
+    base = os.path.basename(args.frame)
     ok = (frame.shape[:2] == (H, W) and real and one_to_one and orientation_ok
           and landmark_ok)
     say("")
     if ok:
-        say("RESULT: PASS ortho_topdown.png 448x768 transform=%s margin=%.2fx "
+        say("RESULT: PASS %s 448x768 transform=%s margin=%.2fx "
             "scale=%.3f off=%+d corr=%.2f blockMAD=%.1f black=%.3f%% "
             "landmarks=ok truthMAD=%s truthr=%s"
-            % (best[1], margin, scale, off, corr, mad, 100.0 * black,
+            % (base, best[1], margin, scale, off, corr, mad, 100.0 * black,
                "%.1f" % colour_stats[0] if colour_stats else "n/a",
                "%.3f" % colour_stats[1] if colour_stats else "n/a"))
     else:
-        say("RESULT: FAIL size=%s real=%s one_to_one=%s orientation=%s "
-            "landmarks=%s winner=%s" % (frame.shape[:2], real, one_to_one,
-                                        orientation_ok, landmark_ok, best[1]))
+        say("RESULT: FAIL %s size=%s real=%s one_to_one=%s orientation=%s "
+            "landmarks=%s winner=%s"
+            % (base, frame.shape[:2], real, one_to_one, orientation_ok,
+               landmark_ok, best[1]))
     return 0 if ok else 1
 
 
