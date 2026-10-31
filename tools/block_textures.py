@@ -92,7 +92,14 @@ TINT = {
     "grass_block_top": GRASS_TINT,
     "grass": GRASS_TINT,
     "fern": GRASS_TINT,
-    "tall_grass": GRASS_TINT,
+    # Double-tall plants keep their two halves in separate files whose names are
+    # NOT the block name, so the block stem ("tall_grass") never matches a real
+    # tile. Vanilla tints both halves with the grass colour; missing these
+    # emitted 1,071 campus columns (0.31 %) as flat grey plants.
+    "tall_grass_bottom": GRASS_TINT,
+    "tall_grass_top": GRASS_TINT,
+    "large_fern_bottom": GRASS_TINT,
+    "large_fern_top": GRASS_TINT,
     "oak_leaves": FOLIAGE_TINT,
     "birch_leaves": FOLIAGE_TINT,
     "jungle_leaves": FOLIAGE_TINT,
@@ -131,6 +138,17 @@ OUT_PX = 16
 #: and its vanilla tile (54.7 % transparent) is already the rails.
 GLASS_DARKEN = 0.35
 GLASS_RE = re.compile(r"glass(?:_pane(?:_top)?)?$")
+
+#: Tile stems Minecraft ships as GREYSCALE and tints at draw time. Every one of
+#: them must appear in ``TINT``; ``emit`` refuses to write a table that leaves
+#: any of them raw, because an untinted stem is not a subtle shading difference
+#: -- it paints a lawn or a canopy flat grey (measured: 1,071 campus columns,
+#: 0.31 %, when the double-tall plant halves were missing from the table).
+GREYSCALE_STEM_RE = re.compile(
+    r"^(?:grass_block_top|grass|fern"
+    r"|tall_grass_(?:top|bottom)|large_fern_(?:top|bottom)"
+    r"|(?:oak|birch|jungle|acacia|dark_oak|spruce)_leaves"
+    r"|vine|lily_pad)$")
 
 _TABLE = None
 
@@ -313,6 +331,17 @@ def emit(out_dir=OUT_DIR):
             "block_textures: %d glass tile(s) still carry alpha after the "
             "opacity pass: %s -- docs/glass_spec.md requires opaque windows"
             % (len(still), ", ".join(still)))
+
+    # Same reasoning for the greyscale stems: ``TINT`` is keyed by tile stem, so
+    # a stem that no block name produces (tall_grass_bottom, say) can sit
+    # untinted for as long as nobody looks. The pattern above is the list of
+    # stems that are greyscale in vanilla, and this is where the two are held
+    # against each other.
+    raw = [n for n in names if GREYSCALE_STEM_RE.match(n) and n not in TINT]
+    if raw:
+        raise SystemExit(
+            "block_textures: %d greyscale tile(s) have no biome tint: %s -- "
+            "they would render flat grey" % (len(raw), ", ".join(raw)))
 
     with open(os.path.join(out_dir, "slots.json"), "w", encoding="utf-8") as fh:
         json.dump({
