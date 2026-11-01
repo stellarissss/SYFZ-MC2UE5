@@ -190,6 +190,11 @@ PP_EXPOSURE = os.environ.get("MC_ORTHO_PP_EXPOSURE", "").strip() not in ("", "0"
 #: only. Dark pixels are geometry in shadow, not a coverage hole -- see the
 #: check in flow().
 MAX_BLACK = float(os.environ.get("MC_ORTHO_MAX_BLACK", "0") or 0)
+#: Zero the height fog for this capture (in memory, never saved). On by
+#: default: an orthographic overhead frame sees tens of optical depths of fog,
+#: so it measures the fog rather than the level. Ground-level frames should set
+#: MC_ORTHO_HIDE_FOG=0 to keep the shipping haze.
+HIDE_FOG = os.environ.get("MC_ORTHO_HIDE_FOG", "1").strip() not in ("", "0")
 MAXDIST = float(os.environ.get("MC_ORTHO_MAXDIST", 200000.0))
 SOURCE = os.environ.get("MC_ORTHO_SOURCE", "SCS_FINAL_COLOR_LDR")
 CVARS = os.environ.get(
@@ -772,6 +777,42 @@ def build(job):
                 pass
         say("MC_ORTHO_UNHIDE_ALL: bHiddenInGame cleared on %d StaticMeshActor(s)"
             % n_un)
+
+    # ---- height fog ----------------------------------------------------
+    # An overhead frame at 600 m is a measuring instrument, not a gameplay
+    # camera: over that distance the analytic height fog is tens of optical
+    # depths thick, so the frame ends up being a picture of the fog. Measured:
+    # with the fog at 0.0005/cm the 600 m frame came back mean (0.9, 1.2, 2.2)
+    # with 92.8% of its pixels dark, while the ground-level frame of the same
+    # level was healthy (mean 86.6, 93.3, 115.5, 0.08% dark). Zeroing the
+    # density here is an in-memory change and is never saved; the ground-level
+    # frames keep the shipping fog, so the shipped look is still measured.
+    if HIDE_FOG:
+        n_fog = 0
+        for a in unreal.GameplayStatics.get_all_actors_of_class(
+                world, unreal.ExponentialHeightFog):
+            comp = _read(a, "component", "fog_component",
+                         "exponential_height_fog_component")
+            if comp is None:
+                try:
+                    comp = a.get_component_by_class(
+                        unreal.ExponentialHeightFogComponent)
+                except Exception:                      # noqa: BLE001
+                    comp = None
+            if comp is None:
+                continue
+            was = _read(comp, "fog_density")
+            try:
+                comp.set_editor_property("fog_density", 0.0)
+                n_fog += 1
+                say("fog: %s density %.6f -> 0 for this capture (in memory "
+                    "only, not saved)" % (a.get_actor_label(), was))
+            except Exception as exc:                   # noqa: BLE001
+                say("fog: could not zero %s (%s)" % (a.get_actor_label(),
+                                                     str(exc)[:80]))
+        if not n_fog:
+            say("fog: MC_ORTHO_HIDE_FOG is on but no ExponentialHeightFog "
+                "component was reachable -- the frame still carries the haze")
 
     census(world)
 
