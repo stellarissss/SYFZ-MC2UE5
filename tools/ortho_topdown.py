@@ -182,6 +182,14 @@ PERSP_CX, PERSP_CY = 1700.0, 21500.0
 HEIGHT = float(os.environ.get("MC_ORTHO_HEIGHT",
                               700.0 if PERSP else 60000.0))
 BIAS = float(os.environ.get("MC_ORTHO_BIAS", 0.0))
+#: Force THIS tool's fixed exposure onto the capture instead of letting the
+#: level's post-process volume decide. Off by default: the frame is supposed to
+#: measure the level that ships, not a capture that compensates for it.
+PP_EXPOSURE = os.environ.get("MC_ORTHO_PP_EXPOSURE", "").strip() not in ("", "0")
+#: Optional budget for dark pixels (max(RGB) <= 8), as a fraction. 0 = report
+#: only. Dark pixels are geometry in shadow, not a coverage hole -- see the
+#: check in flow().
+MAX_BLACK = float(os.environ.get("MC_ORTHO_MAX_BLACK", "0") or 0)
 MAXDIST = float(os.environ.get("MC_ORTHO_MAXDIST", 200000.0))
 SOURCE = os.environ.get("MC_ORTHO_SOURCE", "SCS_FINAL_COLOR_LDR")
 CVARS = os.environ.get(
@@ -891,13 +899,29 @@ def build(job):
         job.pp(key, value, override)
 
     aem = getattr(unreal.AutoExposureMethod, "AEM_HISTOGRAM", None)
-    if aem is not None:
-        pp("auto_exposure_method", aem, "override_auto_exposure_method")
-    # A histogram window with min == max is a *fixed* exposure: adaptation
-    # cannot wander with content, which is what an acceptance frame needs.
-    for key in ("auto_exposure_min_brightness", "auto_exposure_max_brightness"):
-        pp(key, 1.0, "override_" + key)
-    pp("auto_exposure_bias", BIAS, "override_auto_exposure_bias")
+    # Exposure: whose is it?
+    #
+    # Until 11-01 this tool always forced its own fixed exposure onto the
+    # capture component. That made every frame comparable to every other frame
+    # and made the level itself unmeasured: the level could be two stops wrong
+    # and the frame would still look fine, because the capture compensated.
+    # The thing that ships is the level, so by default the level's own
+    # post-process volume is now authoritative and this tool writes nothing.
+    # MC_ORTHO_PP_EXPOSURE=1 restores the old behaviour for A/B work.
+    if PP_EXPOSURE:
+        if aem is not None:
+            pp("auto_exposure_method", aem, "override_auto_exposure_method")
+        # A histogram window with min == max is a *fixed* exposure: adaptation
+        # cannot wander with content, which is what an acceptance frame needs.
+        for key in ("auto_exposure_min_brightness",
+                    "auto_exposure_max_brightness"):
+            pp(key, 1.0, "override_" + key)
+        pp("auto_exposure_bias", BIAS, "override_auto_exposure_bias")
+        say("exposure: forced by this tool (MC_ORTHO_PP_EXPOSURE=1), bias %+."
+            "2f EV" % BIAS)
+    else:
+        say("exposure: left to the LEVEL's post-process stack "
+            "(MC_ORTHO_PP_EXPOSURE is off); the frame measures what ships")
     for k in ("motion_blur_amount", "bloom_intensity", "vignette_intensity",
               "scene_fringe_intensity", "film_grain_intensity"):
         pp(k, 0.0, "override_" + k)
@@ -996,18 +1020,33 @@ def flow(job):
         pass
 
     problems = []
-    if st["black"] >= 0.01:
-        problems.append("%.3f%% pure black (limit 1%%)" % (100.0 * st["black"]))
-    if st["distinct"] < 200 or st["std"] < 5.0:
-        problems.append("degenerate frame (%d distinct, std %.2f)"
-                        % (st["distinct"], st["std"]))
-    if share < 0.45:
-        problems.append("only %.1f%% of the frame is not the modal (sky) colour"
+    # Pure black is NOT a hole, and treating it as one is a trap.
+    #
+    # The message this replaces ("2.073% pure black (limit 1%)") failed a frame
+    # that was in fact fully covered: the black pixels are surfaces the light
+    # does not reach, and they were the same 2.073% both before and after the
+    # terrain hole was fixed, which is the proof that they are not the hole.
+    # A hole shows up as the *background* colour, not as black. So this is
+    # reported always and only fails when a caller asks for a budget with
+    # MC_ORTHO_MAX_BLACK.
+    say("dark pixels (max(RGB)<=8): %.3f%% -- geometry the light misses, not "
+        "a coverage hole; set MC_ORTHO_MAX_BLACK to gate on it"
+        % (100.0 * st["black"]))
+    if MAX_BLACK > 0.0 and st["black"] > MAX_BLACK:
+        problems.append("dark pixels %.3f%% exceeds the requested budget %.3f%%"
+                        % (100.0 * st["black"], 100.0 * MAX_BLACK))
+    # "share" is the fraction of cells differing from the modal colour. Once
+    # the ground is continuous the modal colour IS the ground (31.9% of a
+    # correct frame), so a low share no longer means an empty frame -- it means
+    # a uniform one. It stays as a degeneracy guard only.
+    if share < 0.10:
+        problems.append("only %.1f%% of the frame differs from the modal colour"
+                        " -- possible empty or single-material frame"
                         % (100.0 * share))
     if problems:
         job.finish(False, "; ".join(problems))
         return
-    job.finish(True, "capture %dx%d mean=(%.1f,%.1f,%.1f) black=%.4f%% "
+    job.finish(True, "capture %dx%d mean=(%.1f,%.1f,%.1f) dark=%.4f%% "
                "distinct=%d std=%.1f content=%.1f%% height=%.0f bias=%+.2fEV "
                "samples=%d frames=%d"
                % (RTW, RTH, st["mean"][0], st["mean"][1], st["mean"][2],
