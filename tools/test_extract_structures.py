@@ -220,12 +220,37 @@ class TestGeometry(unittest.TestCase):
         s = np.zeros((3, 3, 3), bool)
         s[1, 1, 1] = True
         corners, _uv, normals, _q = mesh(s, offset=(10, 20))
-        # x -> UE X (carrying the +10 block offset), y height -> UE Z (no
-        # offset), z -> UE Y (carrying the +20 block offset). Voxel 1 spans one
-        # block either side of its origin, so x = (1..2 + 10) * 100 cm.
+        # x -> UE X (carrying the +10 block offset), y height -> UE Z (carrying
+        # whatever height offset it was given -- none here), z -> UE Y
+        # (carrying the +20 block offset). Voxel 1 spans one block either side
+        # of its origin, so x = (1..2 + 10) * 100 cm.
         self.assertEqual(sorted(set(corners[:, 0])), [1100.0, 1200.0])
         self.assertEqual(sorted(set(corners[:, 1])), [2100.0, 2200.0])
         self.assertEqual(sorted(set(corners[:, 2])), [100.0, 200.0])
+
+    def test_height_offset_reaches_the_geometry(self):
+        """The y offset must move the mesh in Z, not be dropped.
+
+        `emit()` crops each object to its own bbox and pads by one, so the
+        volume it meshes starts at the object's lowest block rather than at
+        campus y=0. The mesher used to apply only the x and z offsets, which
+        sank every building by `off[1]` blocks -- silently, because nothing
+        errors and the geometry is otherwise correct. bld_247 (blocks at
+        y=5..9) came out at y=1..6 and the roof of the north teaching block sat
+        two blocks low.
+
+        Asserting the shift is a +400 cm move on Unreal Z keeps the failure
+        from coming back as a "the roofs look a bit low" bug report.
+        """
+        s = np.zeros((3, 6, 3), bool)
+        s[1, 4, 1] = True
+        a, _uv, _n, _q = mesh(s, offset=(0, 0, 0))
+        b, _uv, _n, _q = mesh(s, offset=(0, 4, 0))
+        np.testing.assert_allclose(b - a,
+                                   np.tile([0.0, 0.0, 400.0], (len(a), 1)))
+        # And the absolute position: a block at volume y=4 with a +4 offset is
+        # the campus block at y=8, so its two faces are the planes y=8 and y=9.
+        self.assertEqual(sorted(set(b[:, 2])), [800.0, 900.0])
 
     def test_world_offset(self):
         s = np.zeros((3, 3, 3), bool)
@@ -264,6 +289,55 @@ class TestGreedyMerging(unittest.TestCase):
         _c, _uv, _n, quads = mesh(s, mat=mat, cap=8)
         # The odd material out cannot merge with its neighbours on either side.
         self.assertGreaterEqual(len(quads), 4)
+
+    def test_materials_inside_one_run_do_not_bleed(self):
+        """Mixed materials along a single run must stay separate quads.
+
+        The test above puts its two materials in *different rows*, so every run
+        it builds is homogeneous and it passed while `greedy_quads` was cutting
+        runs on zero/non-zero instead of on a material change. That bug merged
+        any contiguous stretch of exposed cells into one quad carrying the first
+        cell's material, and it is how quartz slab roofs came out as brick: a
+        row reading `39 205 205 205 39` became one bricks quad 28 blocks long.
+
+        Here the materials alternate along the run axis, which is the shape the
+        old code collapsed.
+        """
+        s = np.zeros((4, 4, 9), bool)
+        s[1, 1, 1:8] = True                    # one row, one run of 7 cells
+        mat = np.zeros((4, 4, 9), np.uint16)
+        mat[1, 1, 1:8] = 205                   # quartz
+        mat[1, 1, 3:5] = 39                    # brick in the middle
+        corners, _uv, normals, quads = mesh(s, mat=mat, cap=8)
+
+        # Upward-facing only: the block's bottom face is flat in Z as well, so
+        # "flat" alone would count both sides of every cell.
+        top = [(q[1], q[2], q[3]) for q in quads
+               if abs(float(np.ptp(corners[q[0]:q[0] + 4][:, 2]))) < 1e-9
+               and normals[q[0]][2] > 0]
+        # 2 + 2 quartz either side of a 2-wide brick island, and the last 1
+        # quartz cell, all on the one top plane: q q B B q q q.
+        self.assertEqual(len(top), 3, top)
+        # The run is along Minecraft z, which `mesh_volume` reports as the
+        # quad's second extent, so the split shows up in `h`, not `w`.
+        spans = sorted((h for _slot, _w, h in top))
+        self.assertEqual(spans, [2, 2, 3])
+        slots = [slot for slot, _w, _h in top]
+        self.assertEqual(sorted(slots), [39, 205, 205])
+
+    def test_run_does_not_cross_a_row_boundary(self):
+        """A full row must not continue into the next row's first cell.
+
+        `runs` are indexed by the row they start in, so a run that crossed a
+        boundary would be recorded against that row with a c1 past the row's
+        width and draw columns outside the mask.
+        """
+        s = np.zeros((4, 4, 4), bool)
+        s[1, 1, :] = True                       # a=row fully solid
+        s[1, 2, 0] = True                       # next row's first cell, same value
+        _c, _uv, _n, quads = mesh(s, cap=8)
+        for _base, _slot, w, _h in quads:
+            self.assertLessEqual(w, 4, "quad wider than the mask row")
 
     def test_merge_is_greedy_not_maximal_rectangles(self):
         """An L must not be covered by two overlapping rectangles."""

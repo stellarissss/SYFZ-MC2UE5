@@ -262,23 +262,45 @@ def greedy_quads(mask, cap):
     merge only when their material matches, which is what stops one atlas cell
     bleeding into its neighbour.
 
-    ``cap`` bounds the merged extent on both axes. Without it a quad spans a
-    whole facade and stretches one atlas cell across it.
+    ``cap`` bounds how many rows one quad may span. It does not bound the run
+    along a row -- a run is already homogeneous, so a long one is a correct
+    merge, not a stretched texture (the UVs are block units; see
+    ``TestBlockUnitUVs``).
 
     Returns [(r0, r1, c0, c1, material)] with r1/c1 exclusive.
+
+    Runs are cut on a *material change*, not on a zero/non-zero change. Cutting
+    on non-zero was the first implementation and it merged any contiguous
+    stretch of exposed cells into one run carrying the material of its first
+    cell: a row reading ``39 205 205 205 39`` became a single bricks quad, so
+    quartz roofs rendered as brick. The damage scaled with run length -- up to a
+    whole campus row, 768 blocks -- and the docstring above asserted the very
+    property the code did not implement, which is why nothing caught it. The
+    existing material test put its two materials in different rows, so every run
+    it built was homogeneous.
     """
     h, w = mask.shape
+    if h == 0 or w == 0:
+        return []
 
-    # Horizontal runs, vectorised: there are far fewer runs than cells, so the
-    # per-run merge below stays cheap even on the largest building.
-    solid = mask != 0
-    edges = np.flatnonzero(
-        np.diff(np.concatenate(([0], solid.ravel().view(np.int8), [0]))))
     flat = mask.ravel()
+    # A run starts where the value differs from the previous cell, and always at
+    # the start of a row: without the row break a run could cross into the next
+    # row and be recorded against this one with a c1 past the row's end.
+    change = np.empty(flat.size, dtype=bool)
+    change[0] = True
+    if flat.size > 1:
+        change[1:] = flat[1:] != flat[:-1]
+    change[w::w] = True
+
+    starts = np.flatnonzero(change)
+    ends = np.append(starts[1:], flat.size)
+
     runs = [[] for _ in range(h)]
-    for s0, e0 in zip(edges[0::2], edges[1::2]):
-        c0 = int(s0 % w)
-        runs[int(s0 // w)].append((c0, c0 + int(e0 - s0), int(flat[s0])))
+    for a, b in zip(starts.tolist(), ends.tolist()):
+        val = int(flat[a])
+        if val:
+            runs[a // w].append((a % w, a % w + (b - a), val))
 
     consumed = [set() for _ in range(h)]
     quads = []
@@ -321,7 +343,10 @@ def mesh_volume(solid, occupied, mats, cap, world_offset):
     ``solid``     this object's voxel mask (bool)
     ``occupied``  campus-wide occupancy, any role: the culling reference
     ``mats``      (top, side, bottom) texture-slot volumes, 0 = air
-    ``world_offset`` (x, z) block coordinate of ``solid``'s [0, 0]
+    ``world_offset`` (x, y, z) block coordinate of ``solid``'s [0, 0, 0].
+                   The two-element form (x, z) is accepted for callers that
+                   really do start at campus height 0 and is NOT the same as
+                   passing y=0 by accident: see the branch below.
 
     ``corners`` is (N, 3) in Unreal cm, ``uvs`` is (N, 2) in block units
     (0..w, 0..h per quad), ``quads`` is a
@@ -334,7 +359,16 @@ def mesh_volume(solid, occupied, mats, cap, world_offset):
     grass side flat green.
     """
     mat_top, mat_side, mat_bottom = mats
-    ox, oz = world_offset
+    # Two spellings, because both are real: (x, z) is the historical signature
+    # and means "this volume starts at campus height 0", (x, y, z) is the one
+    # `emit()` uses. Padding a 2-tuple on the right would read (x, z) as
+    # (x, y) and move the mesh by the z offset in height -- which is why this
+    # is an explicit branch instead of a `zip` with a default.
+    if len(world_offset) == 2:
+        ox, oz = world_offset
+        oy = 0.0
+    else:
+        ox, oy, oz = world_offset
     corners, uvs, normals, quads = [], [], [], []
 
     for d in range(3):
@@ -424,12 +458,23 @@ def mesh_volume(solid, occupied, mats, cap, world_offset):
     # mesh itself in Minecraft axes, which still renders (nothing validates
     # it) but puts every wall in the wrong plane.
     #
-    # MC_TO_UE[d] is the Unreal axis that Minecraft axis d lands on, so the
-    # x offset goes with MC x, the z offset with MC z, and block height goes to
-    # Unreal Z with no offset at all.
+    # MC_TO_UE[d] is the Unreal axis that Minecraft axis d lands on, so each
+    # axis carries its own world offset: x offset on UE X, z offset on UE Y,
+    # height offset on UE Z.
+    #
+    # The height offset is not optional and was missing until it was measured.
+    # `subvol()` crops each object to its own bbox and pads by one, so the
+    # volume handed in here starts at the object's lowest block, not at campus
+    # y=0. Dropping `oy` therefore sank every building by `off[1]` blocks:
+    # bld_247 (blocks at y=5..9) was written at y=1..6, and bld_001 by 2. The
+    # only symptom was that roofs sat a few blocks low -- nothing errored, the
+    # triangle counts were right, and the terrain still met the walls, so it
+    # read as a shading problem. `tools/qa_obj_top_vs_truth.py` is what made it
+    # visible: per-column drawn height vs the save disagreed by exactly
+    # `off[1]`.
     out = np.empty_like(corners)
     out[:, MC_TO_UE[0]] = (corners[:, 0] + ox) * BLOCK_CM
-    out[:, MC_TO_UE[1]] = corners[:, 1] * BLOCK_CM
+    out[:, MC_TO_UE[1]] = (corners[:, 1] + oy) * BLOCK_CM
     out[:, MC_TO_UE[2]] = (corners[:, 2] + oz) * BLOCK_CM
     if MC_TO_UE_HANDEDNESS < 0:
         # The axis swap mirrors the space, so reverse every quad's corner order
@@ -465,7 +510,16 @@ def write_obj(path, comments, corners, uvs, normals, quads):
         for n in normals:
             w("vn %.3f %.3f %.3f\n" % (n[0], n[1], n[2]))
         current = None
-        for base, slot, _w, _h in quads:
+        # Group the quads by material. The mesher emits them in emission order
+        # (face direction, then plane, then rectangle), so materials alternate
+        # on almost every quad; the OBJ importer turns each *switch* into a
+        # separate section, and bld_001_structure came out with 20,624 sections
+        # of about 5 triangles each. Sections are draw-call granularity, so that
+        # is a rendering cost with no upside -- the geometry and the slot order
+        # are identical either way, only the order the quads are written in
+        # changes. Sorted by slot, one `usemtl` block per material, and the
+        # section count equals the material count.
+        for base, slot, _w, _h in sorted(quads, key=lambda q: q[1]):
             name = SLOT_NAMES[slot - 1]
             if name != current:
                 w("usemtl %s\n" % name)
@@ -501,7 +555,7 @@ def emit(mask, mats, occupied, cap, out_dir, name, comments):
     sl = tuple(slice(o, o + n) for o, n in zip(off, sub.shape))
     corners, uvs, normals, quads = mesh_volume(
         sub, occupied[sl], tuple(m[sl] for m in mats), cap,
-        (CAMPUS[0] + off[0], CAMPUS[2] + off[2]))
+        (CAMPUS[0] + off[0], off[1], CAMPUS[2] + off[2]))
     if not quads:
         return None
     # else: keep block-space UVs (0..w, 0..h per quad) for a tiling sampler.

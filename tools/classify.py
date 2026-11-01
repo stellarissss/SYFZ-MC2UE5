@@ -351,6 +351,42 @@ def main():
         grown = np.zeros_like(lab)
     lab = grown
 
+    # ---- nothing with a building role may be left unmeshed ----------------
+    #
+    # `min_structure` drops components too small to be a building on their own.
+    # Dropping them from `structures.json` was only half a drop, though: the
+    # voxels stayed in `lab`, so `structure_labels.npy` kept 422 labels while
+    # `structures.json` listed 88. `extract_structures.py` meshes
+    # `labels == oid`, so the other 334 -- 3,436 voxels of fence posts, stair
+    # trims, cobwebs and low garden walls -- were drawn by nobody. Meanwhile
+    # `occupied = role != 0` includes them, so they still culled the faces of
+    # the blocks around them. Invisible *and* face-suppressing: the columns
+    # they stand on lost their roof entirely and the frame showed the storey
+    # below instead.
+    #
+    # So the small components are not dropped, they are *assigned*: each of
+    # their voxels joins the nearest surviving component. A fence post beside a
+    # building is part of that building; a trim on its wall is part of the wall.
+    # Same distance-transform trick as the wall grow above, run once more
+    # against the set of labels that survived.
+    if lab.max():
+        _counts = np.bincount(lab.ravel())
+        _keep = np.nonzero(_counts >= args.min_structure)[0]
+        _keep = _keep[_keep != 0]
+        kept_mask = np.isin(lab, _keep)
+        orphans = (lab != 0) & ~kept_mask
+        n_orphan = int(orphans.sum())
+        if n_orphan:
+            n_orphan_labels = len(set(np.unique(lab[orphans]).tolist()))
+            _, nearest = ndimage.distance_transform_edt(kept_mask == 0,
+                                                       return_indices=True)
+            lab = np.where(orphans,
+                           lab[nearest[0], nearest[1], nearest[2]],
+                           lab)
+            print("trim components: %d voxels in %d sub-threshold components "
+                  "reassigned to their nearest building"
+                  % (n_orphan, n_orphan_labels))
+
     def collect(lab, min_blocks):
         if lab.max() == 0:
             return []
@@ -374,6 +410,15 @@ def main():
         return out
 
     structures = collect(lab, args.min_structure)
+    # The invariant the whole meshing stage depends on: every voxel with a
+    # building role belongs to exactly one listed building. If this ever
+    # disagrees, some block somewhere is being culled out of its neighbours'
+    # faces without being drawn itself.
+    claimed = int(sum(o["blocks"] for o in structures))
+    print("building-role voxels: %d, claimed by a listed building: %d%s"
+          % (int(obj_mask.sum()), claimed,
+             "" if claimed == int(obj_mask.sum())
+             else "   <-- %d UNCLAIMED" % (int(obj_mask.sum()) - claimed)))
     # Largest first: the campus is a handful of big buildings plus outbuildings.
     structures.sort(key=lambda o: -o["blocks"])
 
