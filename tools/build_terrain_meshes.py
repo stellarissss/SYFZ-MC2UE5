@@ -73,6 +73,10 @@ PACK = os.path.join(REPO, "out/terrain_pack")
 OUT = os.path.join(os.environ.get("MC_LOG_DIR",
                                   os.path.join(os.path.dirname(REPO), "logs")),
                    "build_terrain_meshes.txt")
+
+#: Which triangle handedness to feed the mesh description. See the winding
+#: comment in build_tile(): "pack" is the measured-correct one.
+WINDING = (os.environ.get("MC_WINDING", "pack").strip().lower() or "pack")
 L = []
 
 
@@ -118,6 +122,59 @@ def probes():
         say("  numpy  present (unexpected)")
     except Exception:
         say("  numpy  ABSENT -- which is why the geometry comes from a pack")
+
+
+def tile_asset_file(name):
+    """Where this tile's .uasset lives on disk, for the save check.
+
+    Derived from the project's content dir rather than hard-coded, so the check
+    keeps working if the project is moved or renamed.
+    """
+    try:
+        content = unreal.Paths.project_content_dir()      # trailing slash
+    except Exception:                                     # noqa: BLE001
+        content = os.path.join(REPO, "project", "Content") + "/"
+    return os.path.join(content, "MC", "Terrain", name + ".uasset")
+
+
+def mtime_or_zero(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def save_and_verify(asset, uasset, pre):
+    """Save the asset and prove the file on disk actually changed.
+
+    A save that reports success but leaves the .uasset untouched is the failure
+    this exists to catch, and it is not hypothetical: on 11-01 the 24-tile
+    rebuild logged `RESULT: PASS` with every triangle count matching, while
+    terrain_-016_-288 / -016_-160 / -016_-032 were never written (their mtimes
+    stayed at the previous run's 13:06). Those three kept the *previous*
+    winding, so they rendered, had correct bounds, had the right triangle count
+    -- and were invisible from above, which read as "a rectangular hole in the
+    terrain exactly one tile wide". `save_loaded_asset` returns a bool and the
+    caller ignored it.
+
+    Retried, because the failure is a race with the async static mesh build:
+    two more attempts after a short wait always cleared it.
+    """
+    for attempt in range(3):
+        try:
+            ok = bool(unreal.EditorAssetLibrary.save_loaded_asset(asset))
+        except Exception as exc:                          # noqa: BLE001
+            say("      save attempt %d raised: %s"
+                % (attempt + 1, str(exc)[:120]))
+            ok = False
+        post = mtime_or_zero(uasset)
+        if ok and post > pre:
+            return True, post
+        if attempt < 2:
+            say("      save attempt %d did not reach disk (%s, mtime unchanged)"
+                % (attempt + 1, "returned True" if ok else "returned False"))
+            time.sleep(1.5)
+    return False, mtime_or_zero(uasset)
 
 
 def build_tile(t):
@@ -209,6 +266,33 @@ def build_tile(t):
 
     for k in range(want):
         i0, i1, i2 = tri[k]
+        # Winding: which handedness the mesh description wants, measured.
+        #
+        # The pack stores (a, b, c) and (a, c, d) per cell, and with the pack's
+        # own axis order those triangles have a right-hand normal of -Z on all
+        # 32,768 faces of a tile (`(b-a)x(c-a)` -> 100% -Z, checked in
+        # out/terrain_pack/*.pos/*.tri), while the same pack's .nrm is +Z on
+        # every vertex. That mismatch was read as "handed the wrong way" and
+        # the last two indices were swapped -- which was wrong, and the
+        # evidence for it was a top-down frame whose far plane was 1e6 cm, so
+        # exponential height fog covered everything and its 14.9% content was
+        # fog, not missing geometry.
+        #
+        # The handedness is now decided by an A/B instead of by that inference.
+        # Same camera, same level, one variable: out/tile_top.png (pitch -90,
+        # looking down) came back 145 distinct colours, mean (60, 52, 60), the
+        # ground absent; out/tile_below.png (pitch +90, same tile, looking up)
+        # came back 1061 distinct colours, mean (70, 87, 16) -- grass green
+        # filling the whole 256x256 frame. So `flip` makes the surface face
+        # down: the pack's own order is the one UE's mesh description treats as
+        # front-facing, and `pack` is the correct handedness.
+        #
+        # MC_WINDING stays overridable so the choice can be re-measured rather
+        # than inherited: "pack" (default, correct) or "flip" (the earlier
+        # guess). Rebuilding with the wrong one turns the terrain invisible
+        # from above and visible only from underneath.
+        if WINDING == "flip":
+            i1, i2 = i2, i1
         nm = name_of_slot[fam[k]]
         iv = []
         for idx in (i0, i1, i2):
@@ -309,11 +393,19 @@ def build_tile(t):
         return {"name": name,
                 "error": "collision_trace_flag reads back as %s" % got_flag}
 
-    unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    uasset = tile_asset_file(name)
+    pre = mtime_or_zero(uasset)
+    saved, post = save_and_verify(asset, uasset, pre)
+    if not saved:
+        return {"name": name,
+                "error": "save did not reach disk (%s mtime stayed %s)"
+                         % (uasset, time.strftime("%m-%d %H:%M:%S",
+                                                  time.localtime(post)))}
 
     return {"name": name, "want": want, "got": asset.get_num_triangles(0),
             "sections": asset.get_num_sections(0), "slots": slots,
-            "verts": asset.get_num_vertices(0)}
+            "verts": asset.get_num_vertices(0),
+            "saved_at": time.strftime("%H:%M:%S", time.localtime(post))}
 
 
 def main():
@@ -321,6 +413,13 @@ def main():
     t0 = time.time()
     try:
         say("=== build_terrain_meshes (from pack, no OBJ, no importer) ===")
+        say("winding mode: %s (%s)" % (WINDING,
+                                       "pack order, measured-correct"
+                                       if WINDING == "pack" else
+                                       "last two indices swapped"))
+        if WINDING not in ("pack", "flip"):
+            say("*** MC_WINDING must be 'pack' or 'flip', got %r" % WINDING)
+            raise SystemExit(1)
         probes()
         man_path = os.path.join(PACK, "manifest.json")
         if not os.path.isfile(man_path):
@@ -360,9 +459,11 @@ def main():
             want_total += st["want"]
             got_total += st["got"] if isinstance(st["got"], int) else 0
             flag = "" if st["got"] == st["want"] else "   *** MISMATCH"
-            say("  %-22s tris %6d / %-6d  verts %-7s sections %-2s slots %s%s"
+            say("  %-22s tris %6d / %-6d  verts %-7s sections %-2s "
+                "saved %s  slots %s%s"
                 % (st["name"], st["got"], st["want"], st["verts"],
-                   st["sections"], ",".join(st["slots"]), flag))
+                   st["sections"], st.get("saved_at", "?"),
+                   ",".join(st["slots"]), flag))
             if st["got"] != st["want"]:
                 bad.append(st)
 

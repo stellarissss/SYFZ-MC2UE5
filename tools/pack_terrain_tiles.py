@@ -134,7 +134,16 @@ def main():
             pos, uv, nrm, tan = make_verts(us, vs)
 
             # Triangles per cell: (a,b,c) and (a,c,d) with a=(i,j),
-            # b=(i+1,j), c=(i+1,j+1), d=(i,j+1) -- the OBJ writer's winding.
+            # b=(i+1,j), c=(i+1,j+1), d=(i,j+1).
+            #
+            # NOTE on winding: in the pack's own axis frame (where +Y is the
+            # negated block z, see make_verts) these two triangles have a
+            # right-hand normal of -Z on every face, while nrm is +Z. That is
+            # deliberate-looking but wrong, and it is *already compensated* in
+            # build_terrain_meshes.py, which swaps the last two indices when it
+            # feeds the mesh description. Do not flip it here as well: two
+            # flips cancel and the terrain goes back to being invisible from
+            # above only.
             gi, gj = np.meshgrid(np.arange(w - 1), np.arange(d - 1),
                                  indexing="ij")
             a = (gi * d + gj).ravel()

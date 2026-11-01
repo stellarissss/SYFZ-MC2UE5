@@ -160,16 +160,39 @@ Z0, Z1 = -544, 224           # blocks, half-open
 W, H = X1 - X0, Z1 - Z0      # 448 x 768
 BLOCK_CM = 100.0
 ORTHO_WIDTH = (X1 - X0) * BLOCK_CM          # 44800.0
+#: Diagnostic zoom: shrink the ortho width to a few blocks to look at ONE tile
+#: close up. The acceptance frame always uses the full-campus width above.
+ORTHO_WIDTH = float(os.environ.get("MC_ORTHO_WIDTH", ORTHO_WIDTH))
 
-HEIGHT = float(os.environ.get("MC_ORTHO_HEIGHT", 60000.0))
+#: "ortho" (the acceptance frame) or "persp" (diagnostic: a normal camera).
+#:
+#: The persp mode exists because the ortho frame came back with the ground
+#: missing while tall geometry was drawn. A perspective camera parked on the
+#: ground at the same scene settles whether that is a *level* fault or a fault
+#: of this capture path: the ground is centimetres from the lens, so nothing
+#: about far planes, ortho depth ranges or top-down projection can hide it.
+PROJ = (os.environ.get("MC_ORTHO_PROJ", "ortho").strip().lower() or "ortho")
+PERSP = PROJ == "persp"
+FOV = float(os.environ.get("MC_ORTHO_FOV", 70.0))
+PITCH = float(os.environ.get("MC_ORTHO_PITCH", "0" if PERSP else "-90"))
+YAW = float(os.environ.get("MC_ORTHO_YAW", "93.4" if PERSP else "-90"))
+#: The on-foot vantage recorded in logs/vantage.json and applied to the
+#: PlayerStart (logs/apply_spawn.txt): block (17, -215) -> UE (1700, 21500, 700).
+PERSP_CX, PERSP_CY = 1700.0, 21500.0
+HEIGHT = float(os.environ.get("MC_ORTHO_HEIGHT",
+                              700.0 if PERSP else 60000.0))
 BIAS = float(os.environ.get("MC_ORTHO_BIAS", 0.0))
 MAXDIST = float(os.environ.get("MC_ORTHO_MAXDIST", 200000.0))
 SOURCE = os.environ.get("MC_ORTHO_SOURCE", "SCS_FINAL_COLOR_LDR")
 CVARS = os.environ.get(
     "MC_ORTHO_CVARS",
     "r.AntiAliasingMethod 0;r.ScreenPercentage 100;r.TemporalAA.Upsampling 0")
-#: Rotator(pitch=-90, yaw=-90, roll=0) -- see the module docstring.
-CAM_ROT = (0.0, -90.0, -90.0)
+#: Rotator(pitch, yaw, roll) -- see the module docstring.
+CAM_ROT = (0.0, PITCH, YAW)
+#: Render target size. The ortho frame is 1 px per block; the diagnostic
+#: perspective frame is a normal landscape view.
+RTW = int(os.environ.get("MC_ORTHO_RTW", 960 if PERSP else W))
+RTH = int(os.environ.get("MC_ORTHO_RTH", 540 if PERSP else H))
 
 #: Which axis transform turns the render target into ref_map orientation:
 #: 'identity' | 'flip_h' | 'flip_v' | 'rot180'. Chosen by
@@ -187,13 +210,40 @@ AXIS_TRANSFORM = "flip_v"
 #: content share do settle. A stalled/garbage render shows up as a *constant*
 #: frame from sample 1, which is why the warm-up below exists.
 STABLE_FRAMES = 4
-STABLE_MIN_SAMPLE = 8          # let Nanite stream before trusting "settled"
+#: let Nanite stream before trusting "settled". Overridable, because "streamed
+#: in" is a property of the machine and of how much changed in the level, not a
+#: constant: after a mesh reimport the first frames are emptier than usual and a
+#: fixed 8 samples accepted a nearly empty frame as finished. That produced a
+#: frame with 14.9% content that its own degeneracy check rejected, while the
+#: earlier capture of the same camera had 55% -- the tool told the truth, the
+#: sample count did not give it the chance.
+STABLE_MIN_SAMPLE = int(os.environ.get("MC_ORTHO_MIN_SAMPLE", "8"))
 STABLE_MEAN_EPS = 0.05         # mean luma change per sample, 0-255
 STABLE_CONTENT_EPS = 0.004     # content-share change per sample
 #: Give up waiting after this many readbacks (each is ~1 s).
-MAX_SAMPLES = 30
+MAX_SAMPLES = int(os.environ.get("MC_ORTHO_MAX_SAMPLES", "30"))
 #: Frames to wait between readbacks, so the renderer actually advances.
-SAMPLE_EVERY = 3
+SAMPLE_EVERY = int(os.environ.get("MC_ORTHO_SAMPLE_EVERY", "3"))
+#: Keep the superseded voxel-cube layer in the frame. Diagnostic only.
+#:
+#: The 1041 `MCReplicaPropCluster` actors are the *old* layer: one cube per
+#: block, atlas-textured, built before the mesh pipeline existed. It is hidden
+#: by default because the shipped look is terrain + structure meshes. But it is
+#: a full solid voxel world, so if the frame comes back fully covered with the
+#: clusters kept and nearly empty with them hidden, the difference is not a
+#: rendering fault -- it means the *mesh* layer is the layer that is not
+#: drawing, and the cluster layer was what earlier "good" frames showed.
+KEEP_LEGACY = os.environ.get("MC_ORTHO_KEEP_LEGACY", "").strip() not in ("", "0")
+
+#: Clear `bHiddenInGame` on EVERY actor before capturing (diagnostic only).
+#:
+#: The census in this file cannot prove an actor is visible: `bHiddenInGame`
+#: is not reliably readable through the Python property bridge (attempts on
+#: AActor return None, which is indistinguishable from "not hidden"), so a
+#: frame with the terrain missing cannot be blamed on, or cleared of, hiding
+#: by reading properties. Writing False is the only unambiguous test: if the
+#: terrain shows up only when this is on, hiding was the cause.
+UNHIDE_ALL = os.environ.get("MC_ORTHO_UNHIDE_ALL", "").strip() not in ("", "0")
 
 _L = []
 
@@ -525,6 +575,114 @@ class Job(object):
             pass
 
 
+def _read(obj, *names):
+    """First attribute/property in `names` that reads without raising."""
+    for n in names:
+        try:
+            return obj.get_editor_property(n)
+        except Exception:                              # noqa: BLE001
+            pass
+        try:
+            return getattr(obj, n)
+        except Exception:                              # noqa: BLE001
+            pass
+    return None
+
+
+def census(world):
+    """What the renderer is actually being asked to draw, per actor.
+
+    A frame with 7 albedo colours cannot be explained by materials alone, so
+    the three things that would empty a frame are read instead of guessed:
+    a null mesh, a mesh with no slots, or slots that resolve to no material.
+    Every counter here is a fact from the level, not an inference from pixels.
+    """
+    say("--- render census (what the capture will be asked to draw) ---")
+    n_actors = n_null_mesh = n_zero_slots = n_null_slots = n_slots = 0
+    n_hidden = n_invisible = 0
+    shown = 0
+    for a in unreal.GameplayStatics.get_all_actors_of_class(
+            world, unreal.StaticMeshActor):
+        lbl = str(a.get_actor_label())
+        if not lbl.startswith(("B_", "T_", "V_")):
+            continue
+        n_actors += 1
+        sc = _read(a, "static_mesh_component", "static_mesh_component_0")
+        # The mesh lives on the COMPONENT, not on the actor: reading
+        # `static_mesh` off the actor raises and, with a silent fallback,
+        # reports every actor as having a null mesh. Ask the component.
+        mesh = _read(sc, "static_mesh") if sc is not None else None
+        hid = _read(a, "b_hidden_in_game", "hidden_in_game", "bHiddenInGame")
+        vis = None
+        try:
+            vis = sc.is_visible() if sc is not None else None
+        except Exception:                              # noqa: BLE001
+            pass
+        if hid:
+            n_hidden += 1
+        if vis is False:
+            n_invisible += 1
+        if mesh is None:
+            n_null_mesh += 1
+            say("  %-16s NULL MESH" % lbl)
+            continue
+        slots = _read(mesh, "static_materials") or []
+        nulls = sum(1 for s in slots
+                    if _read(s, "material_interface") is None)
+        n_slots += len(slots)
+        n_null_slots += nulls
+        if not slots:
+            n_zero_slots += 1
+        if shown < 8:
+            shown += 1
+            say("  %-16s mesh=%-42s slots=%3d nulls=%3d %s hidden_in_game=%s"
+                % (lbl, mesh.get_name(), len(slots), nulls,
+                   "invisible" if vis is False else "visible", hid))
+    say("actors: %d   null mesh: %d   no slots: %d   hidden_in_game: %d   "
+        "component invisible: %d" % (n_actors, n_null_mesh, n_zero_slots,
+                                     n_hidden, n_invisible))
+    say("material slots: %d total, %d unresolved (null material_interface)"
+        % (n_slots, n_null_slots))
+
+    # --- terrain tiles specifically ---------------------------------------
+    # The ground is the one layer that comes back missing, and it is the only
+    # layer whose mesh is built from a mesh description rather than imported
+    # from an OBJ. Read the two numbers that decide whether the asset has
+    # anything to draw: triangles per LOD and sections. A mesh with triangles
+    # but no sections (or sections with no material) draws nothing at all.
+    say("--- terrain tiles (T_*) ---")
+    n_t = 0
+    for a in unreal.GameplayStatics.get_all_actors_of_class(
+            world, unreal.StaticMeshActor):
+        lbl = str(a.get_actor_label())
+        if not lbl.startswith("T_"):
+            continue
+        n_t += 1
+        sc = _read(a, "static_mesh_component", "static_mesh_component_0")
+        mesh = _read(sc, "static_mesh") if sc is not None else None
+        if mesh is None:
+            say("  %-24s NULL MESH" % lbl)
+            continue
+        def _n(fn, *a_):
+            try:
+                return fn(*a_)
+            except Exception:                          # noqa: BLE001
+                return "?"
+        tris = _n(mesh.get_num_triangles, 0)
+        verts = _n(mesh.get_num_vertices, 0)
+        secs = _n(mesh.get_num_sections, 0)
+        if n_t <= 6:
+            try:
+                o, e = a.get_actor_bounds(False)
+                bb = "loc=(%.0f,%.0f,%.0f) ext=(%.0f,%.0f,%.0f)" % (
+                    o.x, o.y, o.z, e.x, e.y, e.z)
+            except Exception:                          # noqa: BLE001
+                bb = "bounds unreadable"
+            say("  %-24s tris=%-7s verts=%-7s sections=%-3s %s"
+                % (lbl, tris, verts, secs, bb))
+    say("terrain actors: %d" % n_t)
+
+
 def build(job):
     """Level, render target and capture actor. Returns True on success."""
     ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
@@ -587,11 +745,27 @@ def build(job):
             say("NOTE: the level's Y centre is %.0f cm, not the brief's -16000 "
                 "-- the world->UE mapping negates Y. The camera is centred on "
                 "the measured bounds." % ((hi[1] + lo[1]) * 0.5))
-        cam_x = float(os.environ.get("MC_ORTHO_CX", (lo[0] + hi[0]) * 0.5))
-        cam_y = float(os.environ.get("MC_ORTHO_CY", (lo[1] + hi[1]) * 0.5))
+        cam_x = float(os.environ.get(
+            "MC_ORTHO_CX", PERSP_CX if PERSP else (lo[0] + hi[0]) * 0.5))
+        cam_y = float(os.environ.get(
+            "MC_ORTHO_CY", PERSP_CY if PERSP else (lo[1] + hi[1]) * 0.5))
     else:
         cam_x, cam_y = 8000.0, -16000.0
     job.cam = (cam_x, cam_y, HEIGHT)
+
+    if UNHIDE_ALL:
+        n_un = 0
+        for a in unreal.GameplayStatics.get_all_actors_of_class(
+                world, unreal.StaticMeshActor):
+            try:
+                a.set_actor_hidden_in_game(False)
+                n_un += 1
+            except Exception:                          # noqa: BLE001
+                pass
+        say("MC_ORTHO_UNHIDE_ALL: bHiddenInGame cleared on %d StaticMeshActor(s)"
+            % n_un)
+
+    census(world)
 
     # ---- legacy voxel layer -------------------------------------------
     clusters = []
@@ -600,10 +774,27 @@ def build(job):
             world, unreal.MCReplicaPropCluster))
     except Exception as exc:                           # noqa: BLE001
         say("cluster census failed: %s" % exc)
-    say("legacy MCReplicaPropCluster actors: %d (kept out of the capture: they "
-        "are the superseded cube layer, and the shipped look is the terrain + "
-        "structure meshes)" % len(clusters))
-    if clusters:
+    say("legacy MCReplicaPropCluster actors: %d (%s)"
+        % (len(clusters), "KEPT IN the capture: MC_ORTHO_KEEP_LEGACY is on -- "
+           "diagnostic run, these are the superseded cube layer"
+           if KEEP_LEGACY else
+           "kept out of the capture: they are the superseded cube layer, and "
+           "the shipped look is the terrain + structure meshes"))
+    if clusters and KEEP_LEGACY:
+        # Skipping our own hide is not enough: hide_voxel_layer.py saved
+        # bHiddenInGame on these actors as a level property, so they stay out
+        # of the capture until it is cleared here. The first diagnostic run
+        # produced a byte-identical frame precisely because this was missed.
+        n_shown = 0
+        for a in clusters:
+            try:
+                a.set_actor_hidden_in_game(False)
+                n_shown += 1
+            except Exception:                          # noqa: BLE001
+                pass
+        say("legacy clusters explicitly unhidden for the capture: %d/%d"
+            % (n_shown, len(clusters)))
+    if clusters and not KEEP_LEGACY:
         n_hidden = 0
         how = "?"
         for a in clusters:
@@ -624,9 +815,9 @@ def build(job):
     # ---- render target -------------------------------------------------
     rt = None
     crt = getattr(unreal.RenderingLibrary, "create_render_target2d", None)
-    for args in ((world, W, H, unreal.TextureRenderTargetFormat.RTF_RGBA8,
+    for args in ((world, RTW, RTH, unreal.TextureRenderTargetFormat.RTF_RGBA8,
                   unreal.LinearColor(0.0, 0.0, 0.0, 1.0)),
-                 (world, W, H, unreal.TextureRenderTargetFormat.RTF_RGBA8)):
+                 (world, RTW, RTH, unreal.TextureRenderTargetFormat.RTF_RGBA8)):
         try:
             rt = crt(*args)
             say("create_render_target2d(%d args) -> %r" % (len(args), rt))
@@ -664,11 +855,16 @@ def build(job):
     say("camera loc=(%.0f, %.0f, %.0f) rot=(roll %.1f, pitch %.1f, yaw %.1f)"
         % (loc.x, loc.y, loc.z, rot.roll, rot.pitch, rot.yaw))
 
-    mode = getattr(unreal.CameraProjectionMode, "ORTHOGRAPHIC", None)
+    mode = getattr(unreal.CameraProjectionMode,
+                   "PERSPECTIVE" if PERSP else "ORTHOGRAPHIC", None)
     if set_prop(comp, mode, "projection_type") is None:
-        say("RESULT: FAIL the capture component exposes no orthographic switch")
+        say("RESULT: FAIL the capture component exposes no %s switch" % PROJ)
         return False
-    if set_prop(comp, ORTHO_WIDTH, "ortho_width") is None:
+    if PERSP:
+        if set_prop(comp, FOV, "fov_angle") is None:
+            say("RESULT: FAIL fov_angle did not take")
+            return False
+    elif set_prop(comp, ORTHO_WIDTH, "ortho_width") is None:
         say("RESULT: FAIL ortho width did not take")
         return False
     src = getattr(unreal.SceneCaptureSource, SOURCE, None)
@@ -765,8 +961,9 @@ def flow(job):
         job.finish(False, "no frame was ever read back")
         return
 
-    if (rw, rh) != (W, H):
-        job.finish(False, "capture is %dx%d, expected %dx%d" % (rw, rh, W, H))
+    if (rw, rh) != (RTW, RTH):
+        job.finish(False, "capture is %dx%d, expected %dx%d"
+                   % (rw, rh, RTW, RTH))
         return
     st = frame_stats(rows)
     share, bbox, dom = content(rows, rw, rh)
@@ -782,9 +979,10 @@ def flow(job):
         "bbox %s" % (100.0 * share, dom, bbox))
 
     write_png(PNG_RAW, rows)
-    write_png(PNG_OUT, flip_rows(rows, AXIS_TRANSFORM))
-    say("wrote %s (448x768, transform=%s) and raw %s"
-        % (PNG_OUT, AXIS_TRANSFORM, PNG_RAW))
+    xform = "identity" if PERSP else AXIS_TRANSFORM
+    write_png(PNG_OUT, flip_rows(rows, xform))
+    say("wrote %s (%dx%d, transform=%s) and raw %s"
+        % (PNG_OUT, RTW, RTH, xform, PNG_RAW))
 
     try:
         unreal.get_editor_subsystem(unreal.EditorActorSubsystem).destroy_actor(
@@ -812,7 +1010,7 @@ def flow(job):
     job.finish(True, "capture %dx%d mean=(%.1f,%.1f,%.1f) black=%.4f%% "
                "distinct=%d std=%.1f content=%.1f%% height=%.0f bias=%+.2fEV "
                "samples=%d frames=%d"
-               % (W, H, st["mean"][0], st["mean"][1], st["mean"][2],
+               % (RTW, RTH, st["mean"][0], st["mean"][1], st["mean"][2],
                   100.0 * st["black"], st["distinct"], st["std"],
                   100.0 * share, HEIGHT, BIAS, i, job.frames))
 
@@ -824,6 +1022,9 @@ def main():
         % (HEIGHT, BIAS, MAXDIST, SOURCE))
     say("geometry: blocks x[%d,%d) z[%d,%d) -> %dx%d px, ortho width %.0f cm"
         % (X0, X1, Z0, Z1, W, H, ORTHO_WIDTH))
+    say("projection: %s%s  rt=%dx%d  cam rot pitch=%.1f yaw=%.1f  fov=%.1f"
+        % (PROJ, "" if PERSP else " (1 px per block)", RTW, RTH,
+           PITCH, YAW, FOV))
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
     say("slate tick available = %r, quit_editor available = %r"
