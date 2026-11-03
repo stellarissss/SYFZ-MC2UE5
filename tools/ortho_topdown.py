@@ -186,6 +186,12 @@ BIAS = float(os.environ.get("MC_ORTHO_BIAS", 0.0))
 #: level's post-process volume decide. Off by default: the frame is supposed to
 #: measure the level that ships, not a capture that compensates for it.
 PP_EXPOSURE = os.environ.get("MC_ORTHO_PP_EXPOSURE", "").strip() not in ("", "0")
+#: Fixed exposure for calibration frames, used only when MC_ORTHO_PP_EXPOSURE=1.
+#: The level stores a single brightness that has to satisfy two frames (a
+#: top-down one that must match the albedo map and a ground-level one that must
+#: look like daylight), and the cheapest way to find it is to sweep it here
+#: rather than save the level once per guess.
+PP_BRIGHTNESS = float(os.environ.get("MC_ORTHO_PP_BRIGHTNESS", "1.0") or 1.0)
 #: Optional budget for dark pixels (max(RGB) <= 8), as a fraction. 0 = report
 #: only. Dark pixels are geometry in shadow, not a coverage hole -- see the
 #: check in flow().
@@ -956,10 +962,12 @@ def build(job):
         # cannot wander with content, which is what an acceptance frame needs.
         for key in ("auto_exposure_min_brightness",
                     "auto_exposure_max_brightness"):
-            pp(key, 1.0, "override_" + key)
+            pp(key, PP_BRIGHTNESS, "override_" + key)
         pp("auto_exposure_bias", BIAS, "override_auto_exposure_bias")
-        say("exposure: forced by this tool (MC_ORTHO_PP_EXPOSURE=1), bias %+."
-            "2f EV" % BIAS)
+        say("exposure: forced by this tool (MC_ORTHO_PP_EXPOSURE=1), "
+            "min=max brightness %.3f, bias %+.2f EV -- this frame does NOT "
+            "measure what ships; it exists to calibrate the level's own value"
+            % (PP_BRIGHTNESS, BIAS))
     else:
         say("exposure: left to the LEVEL's post-process stack "
             "(MC_ORTHO_PP_EXPOSURE is off); the frame measures what ships")

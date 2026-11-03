@@ -28,7 +28,8 @@ It runs, in order:
     7. build_terrain_meshes.py                     (assets + NORMALS + COLLISION)
     8. build_vegetation_meshes.py                  (assets + actors)
     9. import_block_textures --stage meshes        (structure OBJs + slot bind)
-   10. ensure_lighting.py                          (sun/sky, ApplyLook values)
+   10. fix_lighting_mc.py                         (the daylight look: sun, sky,
+                                                    exposure, post effects)
    11. apply_spawn.py                              (PlayerStart <- spawn.json)
    12. hide_voxel_layer.py                         (visibility + collision off,
                                                     gated on terrain collision)
@@ -186,7 +187,7 @@ EDITOR_STEPS = (
     ("terrain", "tools/build_terrain_meshes.py", {}),
     ("vegetation", "project/Content/Python/build_vegetation_meshes.py", {}),
     ("meshes", "tools/import_block_textures.py", {"MC_STAGE": "meshes"}),
-    ("lighting", "tools/ensure_lighting.py", {}),
+    ("lighting", "tools/fix_lighting_mc.py", {"MC_SAVE_LEVEL": "1"}),
     ("spawn", "project/Content/Python/apply_spawn.py", {}),
     ("hide", "tools/hide_voxel_layer.py", {}),
     ("census", "project/Content/Python/level_census.py", {}),
